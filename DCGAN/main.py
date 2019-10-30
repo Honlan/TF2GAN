@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-import argparse
+import os, argparse
 from model import Model
 import sys
 sys.path.append('..')
