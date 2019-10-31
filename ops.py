@@ -45,7 +45,7 @@ def deconv2d(filters, kernel_size, strides=2, padding='same', dilation_rate=1, a
 def batch_norm():
 	return tk.layers.BatchNormalization()
 
-class InstanceNormalization(tf.layers.Layer):
+class InstanceNormalization(tk.layers.Layer):
 	def __init__(self, epsilon=1e-5):
 		super(InstanceNormalization, self).__init__()
 		self.epsilon = epsilon
@@ -83,9 +83,6 @@ def discriminator_loss(real, fake, gan_type, multi_scale=False):
 		if gan_type == 'vanilla':
 			loss_real = cross_entropy(tf.ones_like(real[i]), real[i])
 			loss_fake = cross_entropy(tf.zeros_like(fake[i]), fake[i])
-		elif gan_type == 'wgan':
-			loss_real = -tf.reduce_mean(real[i])
-			loss_fake = tf.reduce_mean(fake[i])
 		elif gan_type == 'lsgan':
 			loss_real = tf.reduce_mean(tf.square(real[i] - 1.0))
 			loss_fake = tf.reduce_mean(tf.square(fake[i]))
@@ -107,8 +104,6 @@ def generator_loss(fake, gan_type, multi_scale=False):
 	for i in range(len(fake)):
 		if gan_type == 'vanilla':
 			loss_fake = cross_entropy(tf.ones_like(fake[i]), fake[i])
-		elif gan_type == 'wgan':
-			loss_fake = -tf.reduce_mean(fake[i])
 		elif gan_type == 'lsgan':
 			loss_fake = tf.reduce_mean(tf.square(fake[i] - 1.0))
 		elif gan_type == 'hinge':
@@ -117,4 +112,3 @@ def generator_loss(fake, gan_type, multi_scale=False):
 		loss.append(loss_fake)
 
 	return tf.reduce_mean(loss)
-

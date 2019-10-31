@@ -28,8 +28,7 @@ def parse_args():
 	parser.add_argument('--result_dir', type=str, default='results')
 
 	parser.add_argument('--lr', type=float, default=0.0002)
-	parser.add_argument('--gan_type', type=str, default='hinge', choices=('vanilla', 'wgan', 'lsgan', 'hinge'))
-	parser.add_argument('--w_gp', type=float, default=10.0)
+	parser.add_argument('--gan_type', type=str, default='hinge', choices=('vanilla', 'lsgan', 'hinge'))
 
 	args = parser.parse_args()
 	check_dir(args.model_dir)
@@ -48,8 +47,8 @@ def parse_args():
 
 if __name__ == '__main__':
 	args = parse_args()
-	gan = Model(args)
-	gan.build_model()
+	model = Model(args)
+	model.build_model()
 
 	if args.phase == 'train':
 		print('Training...')

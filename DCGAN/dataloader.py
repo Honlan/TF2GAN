@@ -14,15 +14,16 @@ class Dataloader(object):
 
 		AUTOTUNE = tf.data.experimental.AUTOTUNE
 		loader = tf.data.Dataset.from_tensor_slices(self.img_paths).map(self.preprocess, num_parallel_calls=AUTOTUNE)
-		self.loader = loader.apply(tf.data.experimental.shuffle_and_repeat(self.data_num)).batch(self.batch_size).prefetch(buffer_size=AUTOTUNE)
+		self.loader = loader.shuffle(self.data_num).repeat().batch(self.batch_size).prefetch(buffer_size=AUTOTUNE)
 
 	def preprocess(self, img_path, aug=True):
-		img = tf.image.central_crop(tf.image.decode_image(tf.io.read_file(img_path), channels=self.img_nc))
+		img_str = tf.io.read_file(img_path)
+		img = tf.cond(tf.image.is_jpeg(img_str), lambda: tf.image.decode_jpeg(img_str, channels=3), lambda: tf.image.decode_png(img_str, channels=3)) 
 		
 		if aug:
 			aug_size = int(self.img_size * 1.1)
-			img = tf.image.random_flip_left_right(tf.image.random_crop(tf.image.resize(img, aug_size), self.img_size))
+			img = tf.image.random_flip_left_right(tf.image.random_crop(tf.image.resize(img, (aug_size, aug_size)), (self.img_size, self.img_size, self.img_nc)))
 		else:
-			img = tf.image.resize(img, self.img_size)
+			img = tf.image.resize(img, (self.img_size, self.img_size))
 
 		return img / 127.5 - 1.

@@ -14,7 +14,7 @@ class Model(tk.Model):
 		super().__init__()
 		self.args = args
 
-	def generator():
+	def generator(self):
 		return tk.Sequential([
 			dense(4 * 4 * 512), reshape((4, 4, 512)), batch_norm(), Relu(), # 4, 4, 512
 			deconv2d(256, 5), batch_norm(), Relu(), # 8, 8, 256
@@ -22,7 +22,7 @@ class Model(tk.Model):
 			deconv2d(64,  5), batch_norm(), Relu(), # 32, 32, 64
 			deconv2d(self.args.img_nc, 5, activation='tanh')]) # 64, 64, self.img_nc
 
-	def discriminator():
+	def discriminator(self):
 		return tk.Sequential([
 			conv2d(64, 5, 2), Lrelu(), # 32, 32, 64 
 			conv2d(128, 5, 2), batch_norm(), Lrelu(), # 16, 16, 128
@@ -32,21 +32,19 @@ class Model(tk.Model):
 			])
 
 	def build_model(self):
-		self.iter = iter(Dataloader(self.args).loader())
+		self.iter = iter(Dataloader(self.args).loader)
 
-		self.G = generator()
-		self.D = discriminator()
+		self.G = self.generator()
+		self.D = self.discriminator()
 
-		self.optimizer_g = tk.optimizers.Adam(learning_rate=self.args.lr, beta1=0.5)
-		self.optimizer_d = tk.optimizers.Adam(learning_rate=self.args.lr, beta1=0.5)
-		self.vars_g = self.G.trainable_variables
-		self.vars_d = self.D.trainable_variables
+		self.optimizer_g = tk.optimizers.Adam(learning_rate=self.args.lr, beta_1=0.5)
+		self.optimizer_d = tk.optimizers.Adam(learning_rate=self.args.lr, beta_1=0.5)
 
 		self.summary_writer = tf.summary.create_file_writer(self.args.log_dir)
 		self.seed = tf.random.uniform([self.args.batch_size, self.args.z_dim], -1., 1.)
 
-		self.G_dir = os.path.join(self.checkpoint_dir, 'G')
-		self.D_dir = os.path.join(self.checkpoint_dir, 'D')
+		self.G_dir = os.path.join(self.args.checkpoint_dir, 'G')
+		self.D_dir = os.path.join(self.args.checkpoint_dir, 'D')
 		check_dir(self.G_dir)
 		check_dir(self.D_dir)
 
@@ -64,9 +62,9 @@ class Model(tk.Model):
 				loss_d = discriminator_loss(d_real, d_fake, self.args.gan_type)
 				print('iter: [%6d/%6d] time: %4.4f loss_g: %.6f, loss_d: %.6f' % (i, self.args.iteration, time.time() - start_time, loss_g.numpy(), loss_d.numpy()))
 
-			optimizer_g.apply_gradients(zip(tape_g.gradient(loss_g, self.vars_g), self.vars_g))
-			optimizer_d.apply_gradients(zip(tape_d.gradient(loss_d, self.vars_d), self.vars_d))
-
+			self.optimizer_g.apply_gradients(zip(tape_g.gradient(loss_g, self.G.trainable_variables), self.G.trainable_variables))
+			self.optimizer_d.apply_gradients(zip(tape_d.gradient(loss_d, self.D.trainable_variables), self.D.trainable_variables))
+			
 			if (i + 1) % self.args.log_freq == 0:
 				with self.summary_writer.as_default():
 					tf.summary.scalar('loss_g', loss_g, step=i)
