@@ -1,19 +1,18 @@
 # -*- coding: utf-8 -*-
 
 import numpy as np
-import matplotlib.pyplot as plt
-import os
+import imageio, os
 
 def check_dir(out_dir):
 	if not os.path.exists(out_dir):
 		os.mkdir(out_dir)
 
 def imread(img_path, norm=True):
-	img = plt.imread(img_path)
+	img = imageio.imread(img_path)
 	return img / 255. if norm else img
 
 def imsave(save_path, img):
-	plt.imsave(save_path, img)
+	imageio.imsave(save_path, img)
 
 def imdenorm(img):
 	return (img + 1.) / 2.
