@@ -46,14 +46,14 @@ def parse_args():
 	return args
 
 if __name__ == '__main__':
-	args = parse_args()
-	model = Model(args)
-	model.build_model()
+	model = Model(parse_args())
 
 	if args.phase == 'train':
 		print('Training...')
+		model.build_model()
 		model.train()
 		print('Train finished...')
+	
 	elif args.phase == 'test':
 		print('Testing...')
 		model.test()

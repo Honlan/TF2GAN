@@ -72,7 +72,7 @@ class Model(tk.Model):
 
 			if (i + 1) % self.args.sample_freq == 0:
 				sample = self.G(self.seed, training=False)
-				imsave(os.path.join(self.sample_dir, '{:06d}.jpg'.format(i + 1)), montage(imdenorm(sample.numpy())))
+				imsave(os.path.join(self.args.sample_dir, '{:06d}.jpg'.format(i + 1)), montage(imdenorm(sample.numpy())))
 
 			if (i + 1) % self.args.checkpoint_freq == 0:
 				self.save_model()
@@ -80,11 +80,15 @@ class Model(tk.Model):
 		self.save_model()
 
 	def test(self):
-		pass
+		self.load_model(all_module=False)
+		result = self.G(tf.random.uniform([self.args.batch_size, self.args.z_dim], -1., 1.), training=False)
+		imsave(os.path.join(self.args.result_dir, 'result.jpg'), montage(imdenorm(result.numpy())))
 
-	def load_model(self):
+	def load_model(self, all_module=True):
 		self.G = tf.saved_model.load(self.G_dir)
-		self.D = tf.saved_model.load(self.D_dir)
+		
+		if all_module:
+			self.D = tf.saved_model.load(self.D_dir)
 
 	def save_model(self):
 		tf.saved_model.save(self.G, self.G_dir)
