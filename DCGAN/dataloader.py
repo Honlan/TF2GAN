@@ -14,7 +14,7 @@ class Dataloader(object):
 
 		AUTOTUNE = tf.data.experimental.AUTOTUNE
 		loader = tf.data.Dataset.from_tensor_slices(self.img_paths).map(self.preprocess, num_parallel_calls=AUTOTUNE)
-		self.loader = loader.shuffle(self.data_num).repeat().batch(self.batch_size).prefetch(buffer_size=AUTOTUNE)
+		self.loader = loader.apply(tf.data.experimental.shuffle_and_repeat(buffer_size=self.data_num)).batch(self.batch_size).prefetch(buffer_size=AUTOTUNE)
 
 	def preprocess(self, img_path, aug=True):
 		img_str = tf.io.read_file(img_path)

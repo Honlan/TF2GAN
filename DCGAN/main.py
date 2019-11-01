@@ -46,7 +46,8 @@ def parse_args():
 	return args
 
 if __name__ == '__main__':
-	model = Model(parse_args())
+	args = parse_args()
+	model = Model(args)
 
 	if args.phase == 'train':
 		print('Training...')

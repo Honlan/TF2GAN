@@ -63,6 +63,25 @@ class InstanceNormalization(tk.layers.Layer):
 def instance_norm():
 	return InstanceNormalization()
 
+class AdaptiveInstanceNormalization(tk.layers.Layer):
+	def __init__(self, scale, offset, epsilon=1e-5):
+		super(AdaptiveInstanceNormalization, self).__init__()
+		self.scale = scale
+		self.offset = offset
+		self.epsilon = epsilon
+
+	def build(self, input_shape):
+		pass
+
+	def call(self, x):
+		mean, variance = tf.nn.moments(x, axes=[1, 2], keepdims=True)
+		inv = tf.math.rsqrt(variance + self.epsilon)
+		normalized = (x - mean) * inv
+		return self.scale * normalized + self.offset
+
+def adaptive_instance_norm():
+	return AdaptiveInstanceNormalization()
+
 # Losses
 
 def l1_loss(x, y):
@@ -112,3 +131,6 @@ def generator_loss(fake, gan_type, multi_scale=False):
 		loss.append(loss_fake)
 
 	return tf.reduce_mean(loss)
+
+# Others
+

@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+import tensorflow as tf
 import numpy as np
 import imageio, os
 
@@ -27,3 +28,9 @@ def montage(imgs):
 		result[r * H: (r + 1) * H, c * W: (c + 1) * W] = imgs[i]
 
 	return result
+
+def lerp_np(start, end, ratio):
+	return start + (end - start) * np.clip(ratio, 0.0, 1.0)
+
+def lerp_tf(start, end, ratio):
+	return start + (end - start) * tf.clip_by_value(ratio, 0.0, 1.0)
