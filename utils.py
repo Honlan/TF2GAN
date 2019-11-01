@@ -31,6 +31,3 @@ def montage(imgs):
 
 def lerp_np(start, end, ratio):
 	return start + (end - start) * np.clip(ratio, 0.0, 1.0)
-
-def lerp_tf(start, end, ratio):
-	return start + (end - start) * tf.clip_by_value(ratio, 0.0, 1.0)

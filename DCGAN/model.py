@@ -16,19 +16,19 @@ class Model(tk.Model):
 
 	def generator(self):
 		return tk.Sequential([
-			dense(4 * 4 * 512), reshape((4, 4, 512)), batch_norm(), Relu(), # 4, 4, 512
-			deconv2d(256, 5), batch_norm(), Relu(), # 8, 8, 256
-			deconv2d(128, 5), batch_norm(), Relu(), # 16, 16, 128
-			deconv2d(64,  5), batch_norm(), Relu(), # 32, 32, 64
-			deconv2d(self.args.img_nc, 5, activation='tanh')]) # 64, 64, self.img_nc
+			Dense(4 * 4 * 512), Reshape((4, 4, 512)), BN(), Relu(), # 4, 4, 512
+			Deconv2d(256, 5), BN(), Relu(), # 8, 8, 256
+			Deconv2d(128, 5), BN(), Relu(), # 16, 16, 128
+			Deconv2d(64,  5), BN(), Relu(), # 32, 32, 64
+			Deconv2d(self.args.img_nc, 5, activation='tanh')]) # 64, 64, self.img_nc
 
 	def discriminator(self):
 		return tk.Sequential([
-			conv2d(64, 5, 2), Lrelu(), # 32, 32, 64 
-			conv2d(128, 5, 2), batch_norm(), Lrelu(), # 16, 16, 128
-			conv2d(256, 5, 2), batch_norm(), Lrelu(), # 8, 8, 256
-			conv2d(512, 5, 2), batch_norm(), Lrelu(), # 4, 4, 512
-			flatten(), dense(1)
+			Conv2d(64, 5, 2), Lrelu(), # 32, 32, 64 
+			Conv2d(128, 5, 2), BN(), Lrelu(), # 16, 16, 128
+			Conv2d(256, 5, 2), BN(), Lrelu(), # 8, 8, 256
+			Conv2d(512, 5, 2), BN(), Lrelu(), # 4, 4, 512
+			Flatten(), Dense(1)
 			])
 
 	def build_model(self):
