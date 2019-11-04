@@ -25,6 +25,9 @@ def tanh(x):
 
 # Layers
 
+def Input(input_shape):
+	return tk.layers.Input(input_shape)
+
 def Reshape(target_shape):
 	return tk.layers.Reshape(target_shape)
 

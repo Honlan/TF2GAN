@@ -20,27 +20,27 @@ def parse_args():
 	parser.add_argument('--iteration', type=int, default=100000)
 	parser.add_argument('--log_freq', type=int, default=1000)
 	parser.add_argument('--sample_freq', type=int, default=1000)
-	parser.add_argument('--checkpoint_freq', type=int, default=10000)
-	parser.add_argument('--model_dir', type=str, default='models')
-	parser.add_argument('--log_dir', type=str, default='logs')
-	parser.add_argument('--sample_dir', type=str, default='samples')
-	parser.add_argument('--checkpoint_dir', type=str, default='checkpoints')
-	parser.add_argument('--result_dir', type=str, default='results')
+	parser.add_argument('--save_freq', type=int, default=10000)
+	parser.add_argument('--output_dir', type=str, default='output')
+	parser.add_argument('--log_dir', type=str, default='log')
+	parser.add_argument('--sample_dir', type=str, default='sample')
+	parser.add_argument('--save_dir', type=str, default='model')
+	parser.add_argument('--result_dir', type=str, default='result')
 
 	parser.add_argument('--lr', type=float, default=0.0002)
 	parser.add_argument('--gan_type', type=str, default='hinge', choices=('vanilla', 'lsgan', 'hinge'))
 
 	args = parser.parse_args()
-	check_dir(args.model_dir)
-	args.model_dir = os.path.join(args.model_dir, f'DCGAN_{args.dataset_name}')
-	check_dir(args.model_dir)
-	args.log_dir = os.path.join(args.model_dir, args.log_dir)
+	check_dir(args.output_dir)
+	args.output_dir = os.path.join(args.output_dir, f'DCGAN_{args.dataset_name}')
+	check_dir(args.output_dir)
+	args.log_dir = os.path.join(args.output_dir, args.log_dir)
 	check_dir(args.log_dir)
-	args.sample_dir = os.path.join(args.model_dir, args.sample_dir)
+	args.sample_dir = os.path.join(args.output_dir, args.sample_dir)
 	check_dir(args.sample_dir)
-	args.checkpoint_dir = os.path.join(args.model_dir, args.checkpoint_dir)
-	check_dir(args.checkpoint_dir)
-	args.result_dir = os.path.join(args.model_dir, args.result_dir)
+	args.save_dir = os.path.join(args.output_dir, args.save_dir)
+	check_dir(args.save_dir)
+	args.result_dir = os.path.join(args.output_dir, args.result_dir)
 	check_dir(args.result_dir)
 
 	return args
@@ -48,10 +48,10 @@ def parse_args():
 if __name__ == '__main__':
 	args = parse_args()
 	model = Model(args)
+	model.build_model()
 
 	if args.phase == 'train':
 		print('Training...')
-		model.build_model()
 		model.train()
 		print('Train finished...')
 	
