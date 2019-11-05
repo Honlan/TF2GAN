@@ -30,8 +30,7 @@ class Model(tk.Model):
 			Conv2d(128, 5, 2), BN(), Lrelu(), # 16, 16, 128
 			Conv2d(256, 5, 2), BN(), Lrelu(), # 8, 8, 256
 			Conv2d(512, 5, 2), BN(), Lrelu(), # 4, 4, 512
-			Flatten(), Dense(1)
-			])
+			Flatten(), Dense(1)])
 
 	def build_model(self):
 		if self.args.phase == 'train':
@@ -51,6 +50,7 @@ class Model(tk.Model):
 
 	def train(self):
 		start_time = time.time()
+		samples = []
 		for i in range(self.args.iteration):
 			batch = next(self.iter)
 			noise = tf.random.uniform([self.args.batch_size, self.args.z_dim], -1., 1.)
@@ -73,12 +73,15 @@ class Model(tk.Model):
 
 			if (i + 1) % self.args.sample_freq == 0:
 				sample = self.G(self.seed, training=False)
-				imsave(os.path.join(self.args.sample_dir, '{:06d}.jpg'.format(i + 1)), montage(imdenorm(sample.numpy())))
+				sample = montage(imdenorm(sample.numpy()))
+				samples.append(sample)
+				imsave(os.path.join(self.args.sample_dir, '{:06d}.jpg'.format(i + 1)), sample)
 
 			if (i + 1) % self.args.save_freq == 0:
 				self.save_model()
 
 		self.save_model()
+		mimsave(os.path.join(self.args.sample_dir, 'sample.gif'), samples)
 
 	def test(self):
 		result = self.G(tf.random.uniform([self.args.batch_size, self.args.z_dim], -1., 1.), training=False)

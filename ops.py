@@ -96,7 +96,6 @@ def discriminator_loss(real, fake, gan_type, multi_scale=False):
 		fake = [fake]
 
 	cross_entropy = tk.losses.BinaryCrossentropy(from_logits=True)
-
 	loss = []
 	for i in range(len(fake)):
 		if gan_type == 'vanilla':
@@ -111,7 +110,6 @@ def discriminator_loss(real, fake, gan_type, multi_scale=False):
 		elif gan_type == 'wgan':
 			loss_real = -tf.reduce_mean(real[i])
 			loss_fake = tf.reduce_mean(fake[i])
-
 		loss.append(loss_real + loss_fake)
 
 	return tf.reduce_mean(loss)
@@ -121,7 +119,6 @@ def generator_loss(fake, gan_type, multi_scale=False):
 		fake = [fake]
 
 	cross_entropy = tk.losses.BinaryCrossentropy(from_logits=True)
-
 	loss = []
 	for i in range(len(fake)):
 		if gan_type == 'vanilla':
@@ -132,15 +129,9 @@ def generator_loss(fake, gan_type, multi_scale=False):
 			loss_fake = -tf.reduce_mean(fake[i])
 		elif gan_type == 'wgan':
 			loss_fake = -tf.reduce_mean(fake[i])
-
 		loss.append(loss_fake)
 
-	loss = tf.reduce_mean(loss)
-
-	if gan_type == 'wgan':
-		loss += gradient_penalty()
-
-	return loss
+	return tf.reduce_mean(loss)
 
 def gradient_penalty(inter_logit, inter_sample, w_gp=10):
 	grad = tf.gradients(inter_logit, inter_sample)[0]

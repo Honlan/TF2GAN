@@ -2,7 +2,7 @@
 
 import tensorflow as tf
 import numpy as np
-import imageio, os
+import cv2, imageio, os
 
 def check_dir(out_dir):
 	if not os.path.exists(out_dir):
@@ -13,7 +13,16 @@ def imread(img_path, norm=True):
 	return img / 255. if norm else img
 
 def imsave(save_path, img):
-	imageio.imsave(save_path, img)
+	imageio.imsave(save_path, np.clip(img, 0, 1))
+
+def mimsave(save_path, imgs, fps=10):
+	imageio.mimsave(save_path, imgs, fps=fps)
+
+def imresize(img, (h, w)):
+	return cv2.resize(img, (w, h))
+
+def imnorm(img):
+	return (img - 0.5) * 2.
 
 def imdenorm(img):
 	return (img + 1.) / 2.
@@ -31,3 +40,9 @@ def montage(imgs):
 
 def lerp_np(start, end, ratio):
 	return start + (end - start) * np.clip(ratio, 0.0, 1.0)
+
+def ceil(x):
+	return int(np.ceil(x))
+
+def floor(x):
+	return int(np.floor(x))
