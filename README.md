@@ -5,6 +5,6 @@ TensorFlow 2.0 implementations of some interesting Generative Adversarial Networ
 
 ### DCGAN (Deep Convolutional Generative Adversarial Network)
 
-[https://arxiv.org/abs/1511.06434](arvix) [https://github.com/carpedm20/DCGAN-tensorflow](project)
+[arvix](https://arxiv.org/abs/1511.06434) [project](https://github.com/carpedm20/DCGAN-tensorflow)
 
-![asset/teaser.png]()
+![](asset/teaser.png)
