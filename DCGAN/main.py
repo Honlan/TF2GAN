@@ -28,7 +28,7 @@ def parse_args():
 	parser.add_argument('--result_dir', type=str, default='result')
 
 	parser.add_argument('--lr', type=float, default=0.0002)
-	parser.add_argument('--gan_type', type=str, default='hinge', choices=('vanilla', 'lsgan', 'hinge'))
+	parser.add_argument('--gan_type', type=str, default='lsgan', choices=('vanilla', 'lsgan', 'hinge'))
 
 	args = parser.parse_args()
 	check_dir(args.output_dir)
