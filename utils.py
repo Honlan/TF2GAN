@@ -18,7 +18,7 @@ def imsave(save_path, img):
 def mimsave(save_path, imgs, fps=10):
 	imageio.mimsave(save_path, imgs, fps=fps)
 
-def imresize(img, (h, w)):
+def imresize(img, h, w):
 	return cv2.resize(img, (w, h))
 
 def imnorm(img):
