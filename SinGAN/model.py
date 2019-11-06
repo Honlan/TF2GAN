@@ -15,18 +15,21 @@ class Model(tk.Model):
 		self.args = args
 		self.num_scale, self.imgs, self.sizes = Dataloader(args).get_multi_scale_imgs_and_sizes()
 
+		for i in range(self.num_scale):
+			self.imgs[i] = tf.constant(self.imgs[i], tf.float32)
+
 	def generator(self, h, w, c, filters):
 		x = Input((h, w, c,))
 		y = Input((h, w, c,))
 
-		h0 = tk.Sequential([x,
+		S = tk.Sequential([x,
 			Conv2d(filters, 3, 1), BN(), Lrelu(),
 			Conv2d(filters, 3, 1), BN(), Lrelu(),
 			Conv2d(filters, 3, 1), BN(), Lrelu(),
 			Conv2d(filters, 3, 1), BN(), Lrelu(),
 			Conv2d(self.args.img_nc, 3, 1, activation='tanh')])
 
-		return = tk.Model([x, y], Add()([h0, y]))
+		return tk.Model([x, y], Add()([S.output, y]))
 
 	def discriminator(self, h, w, c, filters):
 		return tk.Sequential([
@@ -53,7 +56,7 @@ class Model(tk.Model):
 
 		for scale in range(self.num_scale):
 			img = self.imgs[scale]
-			filters = min(self.num_filter * np.power(2, scale // 4), 128)
+			filters = min(self.args.num_filter * np.power(2, scale // 4), 128)
 			h, w, c = self.sizes[scale][0], self.sizes[scale][1], self.args.img_nc
 
 			if filters == filters_prev:
@@ -68,7 +71,7 @@ class Model(tk.Model):
 			self.optimizer_d = tk.optimizers.Adam(learning_rate=lr, beta_1=0.5)
 
 			rec_prev = self.get_prev('rec')
-			noise_weight = 1 if scale == 0 else self.args.noise_weight * tf.sqrt(l2_loss(img, rec_prev))
+			noise_weight = 1. if scale == 0 else self.args.noise_weight * tf.sqrt(l2_loss(img, rec_prev))
 			self.noise_weights.append(noise_weight)
 
 			for i in range(self.args.iteration):
@@ -79,14 +82,13 @@ class Model(tk.Model):
 						d_real = self.D(img, training=True)
 						
 						fake_prev = self.get_prev('random')
-						fake = self.G(noise_weight * z + fake_prev, fake_prev, training=True)
+						fake = self.G([noise_weight * z + fake_prev, fake_prev], training=True)
 						d_fake = self.D(fake, training=True)
 						loss_d_adv = discriminator_loss(d_real, d_fake, self.args.gan_type)
 						
 						alpha = tf.random.uniform([1, 1, 1, 1], 0., 1.)
 						inter_sample = alpha * img + (1 - alpha) * fake
-						inter_logit = self.D(inter_sample, training=True)
-						loss_d_gp = gradient_penalty(inter_logit, inter_sample, self.args.w_gp)
+						loss_d_gp = gradient_penalty(self.D, inter_sample, self.args.w_gp)
 
 						loss_d = loss_d_adv + loss_d_gp
 
@@ -95,12 +97,12 @@ class Model(tk.Model):
 				for j in range(self.args.G_step):
 					with tf.GradientTape() as tape_g:
 						fake_prev = self.get_prev('random')
-						fake = self.G(noise_weight * z + fake_prev, fake_prev, training=True)
+						fake = self.G([noise_weight * z + fake_prev, fake_prev], training=True)
 						d_fake = self.D(fake, training=True)
 						loss_g_adv = generator_loss(d_fake, self.args.gan_type)
 
 						zr = noise_weight * self.z_fixed if scale == 0 else rec_prev
-						loss_g_rec = self.args.w_rec * l2_loss(self.G(zr, rec_prev, training=True), img)
+						loss_g_rec = self.args.w_rec * l2_loss(self.G([zr, rec_prev], training=True), img)
 						loss_g = loss_g_adv + loss_g_rec
 
 					self.optimizer_g.apply_gradients(zip(tape_g.gradient(loss_g, self.G.trainable_variables), self.G.trainable_variables))
@@ -113,8 +115,8 @@ class Model(tk.Model):
 			self.save_model(scale)
 
 	def get_prev(self, mode='random'):
-		prev = 0
-
+		prev = 0.
+		
 		if mode == 'random':
 			for i in range(len(self.Gs)):
 				h, w, c = self.sizes[i][0], self.sizes[i][1], self.args.img_nc

@@ -36,7 +36,7 @@ def parse_args():
 
 	args = parser.parse_args()
 	check_dir(args.output_dir)
-	args.output_dir = os.path.join(args.output_dir, f'SinGAN_{args.input_image.split('.')[0]}')
+	args.output_dir = os.path.join(args.output_dir, f"SinGAN_{args.input_image.split('.')[0]}")
 	check_dir(args.output_dir)
 	args.save_dir = os.path.join(args.output_dir, args.save_dir)
 	check_dir(args.save_dir)

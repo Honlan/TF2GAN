@@ -7,4 +7,6 @@ TensorFlow 2.0 implementations of some interesting Generative Adversarial Networ
 
 [arvix](https://arxiv.org/abs/1511.06434) [project](https://github.com/carpedm20/DCGAN-tensorflow)
 
-![](./asset/teaser.png)
+![](DCGAN/asset/teaser.png)
+
+![](DCGAN/asset/teaser.png)

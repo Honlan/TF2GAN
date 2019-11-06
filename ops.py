@@ -32,10 +32,13 @@ def Reshape(target_shape):
 	return tk.layers.Reshape(target_shape)
 
 def flatten(x):
-	return reshape(x, [tf.shape(x)[0], -1])
+	return tf.reshape(x, [tf.shape(x)[0], -1])
 
 def Flatten():
 	return tk.layers.Flatten()
+
+def Add():
+	return tk.layers.Add()
 
 def Dense(units, activation=None, use_bias=True, kernel_initializer='glorot_uniform', bias_initializer='zeros'):
 	return tk.layers.Dense(units=units, activation=activation, use_bias=use_bias, kernel_initializer=kernel_initializer, bias_initializer=bias_initializer)
@@ -133,9 +136,14 @@ def generator_loss(fake, gan_type, multi_scale=False):
 
 	return tf.reduce_mean(loss)
 
-def gradient_penalty(inter_logit, inter_sample, w_gp=10):
-	grad = tf.gradients(inter_logit, inter_sample)[0]
+def gradient_penalty(D, inter_sample, w_gp=10):
+	with tf.GradientTape() as tape:
+		tape.watch(inter_sample)
+		inter_logit = D(inter_sample, training=True)
+	
+	grad = tape.gradient(inter_logit, inter_sample)[0]
 	norm = tf.norm(flatten(grad), axis=1)
+	
 	return w_gp * tf.reduce_mean(tf.square(norm - 1.))
 
 # Others

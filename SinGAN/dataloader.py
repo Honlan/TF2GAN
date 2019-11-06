@@ -24,7 +24,7 @@ class Dataloader(object):
 		num_scale = floor(np.log(self.min_size / min(h, w)) / np.log(self.scale_factor)) + 1
 		scale_factor = np.power(self.min_size / min(h, w), 1 / (num_scale - 1))
 		
-		sizes = [], []
+		sizes = []
 		for i in range(num_scale):
 			hs = int(h * np.power(scale_factor, num_scale - 1 - i))
 			ws = int(w * np.power(scale_factor, num_scale - 1 - i))
