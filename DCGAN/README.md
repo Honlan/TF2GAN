@@ -10,19 +10,23 @@ Deep Convolutional Generative Adversarial Network
 
 ## Train
 
-Make a folder under `dataset` and put your images in it, just like the `celeba` dataset
+Make a folder under `dataset` and put your images in it, just like the `celeba` folder
 
-Train the model
+Train the model, where the default value of `--dataset_name` is `celeba`
 
 ```
-python main.py
+python main.py --dataset_name your_dataset_name
 ```
 
 ## Test
 
-Download the pretrained model, unzip it and you will get a folder named `output`
-
 Test the model
+
+```
+python main.py --dataset_name your_dataset_name --phase test
+```
+
+Or download the pretrained model of `celeba`, unzip it and you will get a folder named `output`
 
 ```
 python main.py --phase test
