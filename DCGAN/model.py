@@ -61,7 +61,7 @@ class Model(tk.Model):
 				d_fake = self.D(fake, training=True)
 				loss_g = generator_loss(d_fake, self.args.gan_type)
 				loss_d = discriminator_loss(d_real, d_fake, self.args.gan_type)
-				print('iter: [%6d/%6d] time: %4.4f loss_g: %.6f, loss_d: %.6f' % (i, self.args.iteration, time.time() - start_time, loss_g.numpy(), loss_d.numpy()))
+				print('iter: [%6d/%6d] time: %.2f loss_g: %.4f, loss_d: %.4f' % (i, self.args.iteration, time.time() - start_time, loss_g.numpy(), loss_d.numpy()))
 
 			self.optimizer_g.apply_gradients(zip(tape_g.gradient(loss_g, self.G.trainable_variables), self.G.trainable_variables))
 			self.optimizer_d.apply_gradients(zip(tape_d.gradient(loss_d, self.D.trainable_variables), self.D.trainable_variables))

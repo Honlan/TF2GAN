@@ -2,7 +2,7 @@
 
 import tensorflow as tf
 import tensorflow.keras as tk
-import time
+import time, pickle
 from dataloader import Dataloader
 import sys
 sys.path.append('..')
@@ -56,6 +56,8 @@ class Model(tk.Model):
 
 		for scale in range(self.num_scale):
 			img = self.imgs[scale]
+			imsave(os.path.join(self.args.save_dir, f'real_{scale}.jpg'), imdenorm(img.numpy()[0]))
+
 			filters = min(self.args.num_filter * np.power(2, scale // 4), 128)
 			h, w, c = self.sizes[scale][0], self.sizes[scale][1], self.args.img_nc
 
@@ -102,13 +104,18 @@ class Model(tk.Model):
 						loss_g_adv = generator_loss(d_fake, self.args.gan_type)
 
 						zr = noise_weight * self.z_fixed if scale == 0 else rec_prev
-						loss_g_rec = self.args.w_rec * l2_loss(self.G([zr, rec_prev], training=True), img)
+						rec = self.G([zr, rec_prev], training=True)
+						loss_g_rec = self.args.w_rec * l2_loss(rec, img)
 						loss_g = loss_g_adv + loss_g_rec
 
 					self.optimizer_g.apply_gradients(zip(tape_g.gradient(loss_g, self.G.trainable_variables), self.G.trainable_variables))
 
-				print('scale: [%3d/%3d] iter: [%6d/%6d] time: %4.4f loss_g_adv: %.6f, loss_g_rec: %.6f, loss_d_adv: %.6f, loss_d_gp: %.6f' % (
+				print('scale: [%d/%d] iter: [%4d/%4d] time: %.2f loss_g_adv: %.4f, loss_g_rec: %.4f, loss_d_adv: %.4f, loss_d_gp: %.4f' % (
 					scale, self.num_scale, i, self.args.iteration, time.time() - start_time, loss_g_adv.numpy(), loss_g_rec.numpy(), loss_d_adv.numpy(), loss_d_gp.numpy()))
+
+				if (i + 1) % self.args.sample_freq == 0:
+					imsave(os.path.join(self.args.save_dir, f'fake_{scale}_{i + 1}.jpg'), imdenorm(fake.numpy()[0]))
+					imsave(os.path.join(self.args.save_dir, f'rec_{scale}_{i + 1}.jpg'), imdenorm(rec.numpy()[0]))
 
 			filters_prev = filters
 			self.Gs.append(self.G)
@@ -121,13 +128,13 @@ class Model(tk.Model):
 			for i in range(len(self.Gs)):
 				h, w, c = self.sizes[i][0], self.sizes[i][1], self.args.img_nc
 				z = tf.random.uniform([1, h, w, c], -1., 1.)
-				prev = self.Gs[i](self.noise_weights[i] * z + prev, prev, training=False)
+				prev = self.Gs[i]([self.noise_weights[i] * z + prev, prev], training=False)
 				prev = tf.image.resize(prev, (self.sizes[i + 1][0], self.sizes[i + 1][1]))
 		
 		elif mode == 'rec':
 			for i in range(len(self.Gs)):
 				zr = self.noise_weights[i] * self.z_fixed if i == 0 else prev
-				prev = self.Gs[i](zr, prev, training=False)
+				prev = self.Gs[i]([zr, prev], training=False)
 				prev = tf.image.resize(prev, (self.sizes[i + 1][0], self.sizes[i + 1][1]))
 		
 		return prev
@@ -147,4 +154,4 @@ class Model(tk.Model):
 		self.D.save(os.path.join(self.args.save_dir, f'D_{scale}.h5'))
 
 		with open(os.path.join(self.args.save_dir, 'z_fixed.pkl'), 'wb') as fw:
-			pickle.dump([self.z_fixed.numpy(), self.noise_weights])
+			pickle.dump([self.z_fixed.numpy(), self.noise_weights], fw)

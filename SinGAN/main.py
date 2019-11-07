@@ -30,6 +30,7 @@ def parse_args():
 	parser.add_argument('--w_rec', type=float, default=10)
 	parser.add_argument('--G_step', type=int, default=3)
 	parser.add_argument('--D_step', type=int, default=3)
+	parser.add_argument('--sample_freq', type=int, default=500)
 	parser.add_argument('--output_dir', type=str, default='output')
 	parser.add_argument('--save_dir', type=str, default='model')
 	parser.add_argument('--result_dir', type=str, default='result')
