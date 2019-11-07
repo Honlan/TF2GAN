@@ -4,9 +4,9 @@ Deep Convolutional Generative Adversarial Network
 
 [arvix](https://arxiv.org/abs/1511.06434) [project](https://github.com/carpedm20/DCGAN-tensorflow)
 
-![](DCGAN/asset/teaser.png)
+![](asset/teaser.png)
 
-![](DCGAN/asset/result.jpg)
+![](asset/result.jpg)
 
 ## Train
 
