@@ -77,8 +77,8 @@ class Model(tk.Model):
 			for i in range(self.args.iteration):
 				z = tf.random.uniform([1, h, w, c], -1., 1.)
 
-				h0, w0, c0 = self.sizes[0][0], self.sizes[0][1], self.args.img_nc
-				self.z_fixed = tf.random.uniform([1, h0, w0, c0], -1., 1.)
+				h, w, c = self.sizes[0][0], self.sizes[0][1], self.args.img_nc
+				self.z_fixed = tf.random.uniform([1, h, w, c], -1., 1.)
 
 				for j in range(self.args.D_step):
 					with tf.GradientTape() as tape_d:
