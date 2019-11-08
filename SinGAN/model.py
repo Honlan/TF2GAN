@@ -17,6 +17,7 @@ class Model(tk.Model):
 
 		for i in range(self.num_scale):
 			self.imgs[i] = tf.constant(self.imgs[i], tf.float32)
+			self.sizes[i].append(self.args.img_nc)
 
 	def generator(self, h, w, c, filters):
 		x = Input((h, w, c,))
@@ -43,6 +44,7 @@ class Model(tk.Model):
 	def build_model(self):
 		if self.args.phase == 'train':
 			self.Gs = []
+			self.Ds = []
 			self.noise_weights = []
 		
 		elif self.args.phase == 'test':
@@ -57,14 +59,17 @@ class Model(tk.Model):
 			imsave(os.path.join(self.args.save_dir, f'real_{scale}.jpg'), imdenorm(img.numpy()[0]))
 
 			filters = min(self.args.num_filter * np.power(2, scale // 4), 128)
-			h, w, c = self.sizes[scale][0], self.sizes[scale][1], self.args.img_nc
+			h, w, c = self.sizes[scale][0], self.sizes[scale][1], self.sizes[scale][2]
 
 			if filters == filters_prev:
-				self.G = tk.models.load_model(os.path.join(self.args.save_dir, f'G_{scale - 1}.h5'))
-				self.D = tk.models.load_model(os.path.join(self.args.save_dir, f'D_{scale - 1}.h5'))
+				G = tk.models.load_model(os.path.join(self.args.save_dir, f'G_{scale - 1}.h5'))
+				D = tk.models.load_model(os.path.join(self.args.save_dir, f'D_{scale - 1}.h5'))
 			else:
-				self.G = self.generator(h, w, c, filters)
-				self.D = self.discriminator(h, w, c, filters)
+				G = self.generator(h, w, c, filters)
+				D = self.discriminator(h, w, c, filters)
+			
+			self.Gs.append(G)
+			self.Ds.append(D)
 
 			lr = tk.optimizers.schedules.ExponentialDecay(self.args.lr, decay_steps=self.args.decay_steps, decay_rate=self.args.decay_rate)
 			self.optimizer_g = tk.optimizers.Adam(learning_rate=lr, beta_1=0.5)
@@ -76,9 +81,10 @@ class Model(tk.Model):
 
 			for i in range(self.args.iteration):
 				z = tf.random.uniform([1, h, w, c], -1., 1.)
+				z_fixed = tf.random.uniform(tf.shape(self.imgs[0]), -1., 1.)
 
 				h0, w0, c0 = self.sizes[0][0], self.sizes[0][1], self.args.img_nc
-				self.z_fixed = tf.random.uniform([1, h0, w0, c0], -1., 1.)
+				self.
 
 				for j in range(self.args.D_step):
 					with tf.GradientTape() as tape_d:

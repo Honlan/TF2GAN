@@ -18,7 +18,9 @@ class Dataloader(object):
 
 	def preprocess(self, img_path, aug=True):
 		img_str = tf.io.read_file(img_path)
-		img = tf.cond(tf.image.is_jpeg(img_str), lambda: tf.image.decode_jpeg(img_str, channels=3), lambda: tf.image.decode_png(img_str, channels=3)) 
+		img = tf.cond(tf.image.is_jpeg(img_str), lambda: tf.image.decode_jpeg(img_str, channels=3), lambda: tf.image.decode_png(img_str, channels=3))
+		square_size = tf.reduce_mean(tf.shape(img)[:-1])
+		img = tf.image.resize_with_crop_or_pad(img, square_size, square_size)
 		
 		if aug:
 			aug_size = int(self.img_size * 1.1)

@@ -16,7 +16,7 @@ def parse_args():
 	parser.add_argument('--img_nc', type=int, default=3)
 	parser.add_argument('--z_dim', type=int, default=128)
 
-	parser.add_argument('--batch_size', type=int, default=64)
+	parser.add_argument('--batch_size', type=int, default=128)
 	parser.add_argument('--iteration', type=int, default=100000)
 	parser.add_argument('--log_freq', type=int, default=1000)
 	parser.add_argument('--sample_freq', type=int, default=1000)
@@ -28,7 +28,7 @@ def parse_args():
 	parser.add_argument('--result_dir', type=str, default='result')
 
 	parser.add_argument('--lr', type=float, default=0.0002)
-	parser.add_argument('--gan_type', type=str, default='lsgan', choices=('vanilla', 'lsgan', 'hinge'))
+	parser.add_argument('--gan_type', type=str, default='vanilla', choices=('vanilla', 'lsgan', 'hinge'))
 
 	args = parser.parse_args()
 	check_dir(args.output_dir)
