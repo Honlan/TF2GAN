@@ -20,17 +20,19 @@ class Dataloader(object):
 				h, w = self.max_size, int(w / sf)
 			else:
 				h, w = int(h / sf), self.max_size
-
-		num_scale = floor(np.log(self.min_size / min(h, w)) / np.log(self.scale_factor)) + 1
-		scale_factor = np.power(self.min_size / min(h, w), 1 / (num_scale - 1))
+	
+		sizes = [[h, w]]
 		
-		sizes = []
-		for i in range(num_scale):
-			hs = int(h * np.power(scale_factor, num_scale - 1 - i))
-			ws = int(w * np.power(scale_factor, num_scale - 1 - i))
-			sizes.append([hs, ws])
+		while True:
+			h = ceil(h * self.scale_factor)
+			w = ceil(w * self.scale_factor)
+			
+			if min(h, w) > self.min_size:
+				sizes.append([h, w])
+			else:
+				break
 
-		return num_scale, sizes
+		return len(sizes), sizes[::-1]
 
 	def get_multi_scale_imgs_and_sizes(self):
 		h, w = self.img.shape[:2]

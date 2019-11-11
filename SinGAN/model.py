@@ -44,8 +44,9 @@ class Model(tk.Model):
 	def build_model(self):
 		if self.args.phase == 'train':
 			self.filters = [min(self.args.num_filter * np.power(2, i // 4), 128) for i in range(self.num_scale)]
-			self.Gs = []
-			self.Ds = []
+			self.Gs = [self.generator(self.sizes[i][0], self.sizes[i][1], self.sizes[i][2], self.filters[i]) for i in range(self.num_scale)]
+			self.Ds = [self.discriminator(self.sizes[i][0], self.sizes[i][1], self.sizes[i][2], self.filters[i]) for i in range(self.num_scale)]
+			self.z_fixed = tf.random.normal(tf.shape(self.imgs[0]))
 			self.noise_weights = []
 		
 		elif self.args.phase == 'test':
@@ -58,69 +59,56 @@ class Model(tk.Model):
 			imsave(os.path.join(self.args.save_dir, f'real_{scale}.jpg'), imdenorm(img.numpy()[0]))
 
 			if scale > 0 and self.filters[scale] == self.filters[scale - 1]:
-				G = tk.models.load_model(os.path.join(self.args.save_dir, f'G_{scale - 1}.h5'))
-				D = tk.models.load_model(os.path.join(self.args.save_dir, f'D_{scale - 1}.h5'))
-			else:
-				h, w, c, f = self.sizes[scale][0], self.sizes[scale][1], self.sizes[scale][2], self.filters[scale]
-				G = self.generator(h, w, c, f)
-				D = self.discriminator(h, w, c, f)
-			
-			self.Gs.append(G)
-			self.Ds.append(D)
+				self.Gs[scale].load_weights(os.path.join(self.args.save_dir, f'G_{scale - 1}.h5'))
+				self.Ds[scale].load_weights(os.path.join(self.args.save_dir, f'D_{scale - 1}.h5'))
 
 			lr = tk.optimizers.schedules.ExponentialDecay(self.args.lr, decay_steps=self.args.decay_steps, decay_rate=self.args.decay_rate)
 			self.optimizer_g = tk.optimizers.Adam(learning_rate=lr, beta_1=0.5)
 			self.optimizer_d = tk.optimizers.Adam(learning_rate=lr, beta_1=0.5)
 
+			rec_prev = 0.
+			for s in range(scale):
+				zr = self.z_fixed if s == 0 else rec_prev
+				rec_prev = self.Gs[s]([zr, rec_prev], training=False)
+				rec_prev = tf.image.resize(rec_prev, (self.sizes[s + 1][0], self.sizes[s + 1][1]))
+
 			noise_weight = 1. if scale == 0 else self.args.noise_weight * tf.sqrt(l2_loss(img, rec_prev))
 			self.noise_weights.append(noise_weight)
 
 			for i in range(self.args.iteration):
-				z_fixed = tf.random.normal(tf.shape(self.imgs[0]))
+				z = tf.random.normal(tf.shape(self.imgs[scale]))
 
 				fake_prev = 0.
-				for j in range(scale):
-					z = tf.random.normal(tf.shape(self.imgs[j]))
-					fake_prev = self.Gs[j]([self.noise_weights[j] * z + fake_prev, fake_prev], training=False)
-					fake_prev = tf.image.resize(fake_prev, (self.sizes[j + 1][0], self.sizes[j + 1][1]))
+				for s in range(scale):
+					fake_prev = self.Gs[s]([self.noise_weights[s] * tf.random.normal(tf.shape(self.imgs[s])) + fake_prev, fake_prev], training=False)
+					fake_prev = tf.image.resize(fake_prev, (self.sizes[s + 1][0], self.sizes[s + 1][1]))
 
-				rec_prev = 0.
-				for j in range(scale):
-					zr = z_fixed if j == 0 else rec_prev
-					rec_prev = self.Gs[j]([zr, rec_prev], training=False)
-					rec_prev = tf.image.resize(rec_prev, (self.sizes[j + 1][0], self.sizes[j + 1][1]))
-
-				for j in range(self.args.D_step + self.args.G_step):
-					z = tf.random.normal(tf.shape(self.imgs[scale]))
-
-					with tf.GradientTape() as tape_d, tf.GradientTape() as tape_g:
-						if j < self.args.D_step:
-							d_real = self.Ds[scale](img, training=True)
-
+				for j in range(self.args.D_step):
+					with tf.GradientTape() as tape_d:
+						d_real = self.Ds[scale](img, training=True)
 						fake = self.Gs[scale]([noise_weight * z + fake_prev, fake_prev], training=True)
 						d_fake = self.Ds[scale](fake, training=True)
+						loss_d_adv = discriminator_loss(d_real, d_fake, self.args.gan_type)
 
-						if j < self.args.D_step:
-							loss_d_adv = discriminator_loss(d_real, d_fake, self.args.gan_type)
+						alpha = tf.random.uniform([1, 1, 1, 1], 0., 1.)
+						inter_sample = alpha * img + (1 - alpha) * fake
+						loss_d_gp = gradient_penalty(self.Ds[scale], inter_sample, self.args.w_gp)
+						
+						loss_d = loss_d_adv + loss_d_gp
 
-							alpha = tf.random.uniform([1, 1, 1, 1], 0., 1.)
-							inter_sample = alpha * img + (1 - alpha) * fake
-							loss_d_gp = gradient_penalty(self.Ds[scale], inter_sample, self.args.w_gp)
-							
-							loss_d = loss_d_adv + loss_d_gp
-						else:
-							loss_g_adv = generator_loss(d_fake, self.args.gan_type)
+					self.optimizer_d.apply_gradients(zip(tape_d.gradient(loss_d, self.Ds[scale].trainable_variables), self.Ds[scale].trainable_variables))
 
-							zr = z_fixed if scale == 0 else rec_prev
-							rec = self.Gs[scale]([zr, rec_prev], training=True)
-							loss_g_rec = self.args.w_rec * l2_loss(rec, img)
+				for j in range(self.args.G_step):
+					with tf.GradientTape() as tape_g:
+						loss_g_adv = generator_loss(d_fake, self.args.gan_type)
 
-							loss_g = loss_g_adv + loss_g_rec
+						zr = self.z_fixed if scale == 0 else rec_prev
+						rec = self.Gs[scale]([zr, rec_prev], training=True)
+						loss_g_rec = self.args.w_rec * l2_loss(rec, img)
 
-					if j < self.args.D_step:
-						self.optimizer_d.apply_gradients(zip(tape_d.gradient(loss_d, self.Ds[scale].trainable_variables), self.Ds[scale].trainable_variables))
-					else:
-						self.optimizer_g.apply_gradients(zip(tape_g.gradient(loss_g, self.Gs[scale].trainable_variables), self.Gs[scale].trainable_variables))
+						loss_g = loss_g_adv + loss_g_rec
+
+					self.optimizer_g.apply_gradients(zip(tape_g.gradient(loss_g, self.Gs[scale].trainable_variables), self.Gs[scale].trainable_variables))
 
 				print('scale: [%d/%d] iter: [%4d/%4d] time: %.2f loss_g_adv: %.4f, loss_g_rec: %.4f, loss_d_adv: %.4f, loss_d_gp: %.4f' % (
 					scale, self.num_scale, i, self.args.iteration, time.time() - start_time, loss_g_adv.numpy(), loss_g_rec.numpy(), loss_d_adv.numpy(), loss_d_gp.numpy()))
@@ -145,5 +133,5 @@ class Model(tk.Model):
 		self.Gs[scale].save(os.path.join(self.args.save_dir, f'G_{scale}.h5'))
 		self.Ds[scale].save(os.path.join(self.args.save_dir, f'D_{scale}.h5'))
 
-		with open(os.path.join(self.args.save_dir, 'noise_weights.pkl'), 'wb') as fw:
-			pickle.dump(self.noise_weights, fw)
+		with open(os.path.join(self.args.save_dir, 'z_fixed_and_noise_weights.pkl'), 'wb') as fw:
+			pickle.dump([self.z_fixed.numpy(), self.noise_weights], fw)
