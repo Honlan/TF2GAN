@@ -14,9 +14,9 @@ def parse_args():
 	parser.add_argument('--phase', type=str, default='train', choices=('train', 'test'))
 	parser.add_argument('--img_size', type=int, default=64)
 	parser.add_argument('--img_nc', type=int, default=3)
-	parser.add_argument('--z_dim', type=int, default=128)
+	parser.add_argument('--z_dim', type=int, default=100)
 
-	parser.add_argument('--batch_size', type=int, default=128)
+	parser.add_argument('--batch_size', type=int, default=100)
 	parser.add_argument('--iteration', type=int, default=100000)
 	parser.add_argument('--log_freq', type=int, default=1000)
 	parser.add_argument('--sample_freq', type=int, default=1000)
