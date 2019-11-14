@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import os, argparse
+from dataloader import Dataloader
 from model import Model
 import sys
 sys.path.append('..')
@@ -11,7 +12,7 @@ def parse_args():
 	parser = argparse.ArgumentParser(description=desc)
 
 	parser.add_argument('--dataset_name', type=str, default='celeba')
-	parser.add_argument('--phase', type=str, default='train', choices=('train', 'test'))
+	parser.add_argument('--phase', type=str, default='tfrecord', choices=('tfrecord', 'train', 'test'))
 	parser.add_argument('--img_size', type=int, default=64)
 	parser.add_argument('--img_nc', type=int, default=3)
 	parser.add_argument('--z_dim', type=int, default=100)
@@ -47,15 +48,21 @@ def parse_args():
 
 if __name__ == '__main__':
 	args = parse_args()
-	model = Model(args)
-	model.build_model()
+	if args.phase == 'tfrecord':
+		print('Converting data to tfrecord...')
+		Dataloader(args)
+		print('Convert finished...')
 
-	if args.phase == 'train':
-		print('Training...')
-		model.train()
-		print('Train finished...')
-	
-	elif args.phase == 'test':
-		print('Testing...')
-		model.test()
-		print('Test finished...')
+	else:
+		model = Model(args)
+		model.build_model()
+
+		if args.phase == 'train':
+			print('Training...')
+			model.train()
+			print('Train finished...')
+		
+		elif args.phase == 'test':
+			print('Testing...')
+			model.test()
+			print('Test finished...')

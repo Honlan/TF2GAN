@@ -12,10 +12,10 @@ def Relu():
 	return tk.layers.ReLU()
 
 def lrelu(x, alpha=0.2):
-	return tf.nn.leaky_relu(x, alpha=alpha)
+	return tf.nn.leaky_relu(x, alpha)
 
 def Lrelu(alpha=0.2):
-	return tk.layers.LeakyReLU(alpha=alpha)
+	return tk.layers.LeakyReLU(alpha)
 
 def sigmoid(x):
 	return tf.nn.sigmoid(x)
