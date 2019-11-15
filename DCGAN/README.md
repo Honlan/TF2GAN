@@ -12,10 +12,16 @@ Deep Convolutional Generative Adversarial Network
 
 Make a folder under `dataset` and put your images in it, just like the `celeba` folder
 
-Train the model, where the default value of `--dataset_name` is `celeba`
+Convert the data to tfrecord for convenience, where the default value of `--dataset_name` is `celeba`
 
 ```
-python main.py --dataset_name your_dataset_name
+python main.py --dataset_name your_dataset_name --phase tfrecord
+```
+
+Train the model
+
+```
+python main.py --dataset_name your_dataset_name --phase train
 ```
 
 ## Test
