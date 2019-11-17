@@ -16,7 +16,7 @@ class Model(tk.Model):
 		self.num_scale, self.imgs, self.sizes = Dataloader(args).get_multi_scale_imgs_and_sizes()
 
 		for i in range(self.num_scale):
-			self.imgs[i] = tf.constant(self.imgs[i], tf.float32)
+			self.imgs[i] = tf.constant(self.imgs[i], 'float32')
 			self.sizes[i].append(self.args.img_nc)
 
 	def generator(self, h, w, c, filters):
