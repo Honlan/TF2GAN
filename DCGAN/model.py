@@ -50,28 +50,34 @@ class Model(tk.Model):
 		elif self.args.phase == 'test':
 			self.load_model()
 
+	@tf.function
+	def train_one_step(self, batch, noise):
+		with tf.GradientTape() as tape_g, tf.GradientTape() as tape_d:
+			fake = self.G(noise, training=True)
+			d_real = self.D(batch, training=True)
+			d_fake = self.D(fake, training=True)
+			loss_g = generator_loss(d_fake, self.args.gan_type)
+			loss_d = discriminator_loss(d_real, d_fake, self.args.gan_type)
+
+		self.optimizer_g.apply_gradients(zip(tape_g.gradient(loss_g, self.vars_g), self.vars_g))
+		self.optimizer_d.apply_gradients(zip(tape_d.gradient(loss_d, self.vars_d), self.vars_d))
+
+		return {'loss_g': loss_g, 'loss_d': loss_d}
+
 	def train(self):
 		start_time = time.time()
 		samples = []
 		for i in range(self.args.iteration):
 			batch = next(self.iter)
 			noise = tf.random.uniform([self.args.batch_size, self.args.z_dim], -1., 1.)
-			
-			with tf.GradientTape() as tape_g, tf.GradientTape() as tape_d:
-				fake = self.G(noise, training=True)
-				d_real = self.D(batch, training=True)
-				d_fake = self.D(fake, training=True)
-				loss_g = generator_loss(d_fake, self.args.gan_type)
-				loss_d = discriminator_loss(d_real, d_fake, self.args.gan_type)
 
-			self.optimizer_g.apply_gradients(zip(tape_g.gradient(loss_g, self.vars_g), self.vars_g))
-			self.optimizer_d.apply_gradients(zip(tape_d.gradient(loss_d, self.vars_d), self.vars_d))
+			loss = self.train_one_step(batch, noise)
 			print('iter: [%6d/%6d] time: %.2f' % (i, self.args.iteration, time.time() - start_time))
 			
 			if (i + 1) % self.args.log_freq == 0:
 				with self.summary_writer.as_default():
-					tf.summary.scalar('loss_g', loss_g, step=i)
-					tf.summary.scalar('loss_d', loss_d, step=i)
+					tf.summary.scalar('loss_g', loss['loss_g'], step=i)
+					tf.summary.scalar('loss_d', loss['loss_d'], step=i)
 
 			if (i + 1) % self.args.sample_freq == 0:
 				sample = self.G(self.seed, training=False)

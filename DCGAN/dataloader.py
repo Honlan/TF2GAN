@@ -27,22 +27,25 @@ class Dataloader(object):
 		elif args.phase == 'train':
 			dataset = tf.data.TFRecordDataset(self.tfrecord_path)
 			self.desc = {'img': tf.io.FixedLenFeature([], 'string')}
-			self.loader = dataset.map(self.parse_example, AUTOTUNE).shuffle(self.dataset_size).repeat().map(self.augmentation, 
-				AUTOTUNE).batch(self.batch_size).prefetch(AUTOTUNE)
+			self.loader = dataset.shuffle(min(self.dataset_size, 10000)).repeat().map(
+				self.parse_example, AUTOTUNE).batch(self.batch_size).prefetch(AUTOTUNE)
 
 	def parse_example(self, example):
 		feature = tf.io.parse_single_example(example, self.desc)
-		return self.load_image(feature['img'])
+		img = self.load_image(feature['img'])
+		img = self.augmentation(img)
+		return img
 
 	def load_image(self, img_str):
 		img = tf.cond(tf.image.is_jpeg(img_str), 
 			lambda: tf.image.decode_jpeg(img_str, self.img_nc), 
 			lambda: tf.image.decode_png(img_str, self.img_nc))
 		img = tf.image.resize_with_crop_or_pad(img, self.shorter_size, self.shorter_size)
+		img = tf.cast(img, 'float32') / 127.5 - 1.
 		return img
 
 	def augmentation(self, img):
 		img = tf.image.resize(img, (self.aug_size, self.aug_size))
 		img = tf.image.random_crop(img, (self.img_size, self.img_size, self.img_nc))
 		img = tf.image.random_flip_left_right(img)
-		return tf.cast(img, 'float32') / 127.5 - 1.
+		return img
