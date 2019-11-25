@@ -46,7 +46,7 @@ class Model(tk.Model):
 			self.filters = [min(self.args.num_filter * np.power(2, i // 4), 128) for i in range(self.num_scale)]
 			self.Gs = [self.generator(self.sizes[i][0], self.sizes[i][1], self.sizes[i][2], self.filters[i]) for i in range(self.num_scale)]
 			self.Ds = [self.discriminator(self.sizes[i][0], self.sizes[i][1], self.sizes[i][2], self.filters[i]) for i in range(self.num_scale)]
-			self.z_fixed = tf.random.normal(tf.shape(self.imgs[0]))
+			self.z_fixed = tf.random.normal(self.imgs[0].shape)
 			self.noise_weights = []
 		
 		elif self.args.phase == 'test':
@@ -76,11 +76,11 @@ class Model(tk.Model):
 			self.noise_weights.append(noise_weight)
 
 			for i in range(self.args.iteration):
-				z = tf.random.normal(tf.shape(self.imgs[scale]))
+				z = tf.random.normal(self.imgs[scale].shape)
 
 				fake_prev = 0.
 				for s in range(scale):
-					fake_prev = self.Gs[s]([self.noise_weights[s] * tf.random.normal(tf.shape(self.imgs[s])) + fake_prev, fake_prev], training=False)
+					fake_prev = self.Gs[s]([self.noise_weights[s] * tf.random.normal(self.imgs[s].shape) + fake_prev, fake_prev], training=False)
 					fake_prev = tf.image.resize(fake_prev, (self.sizes[s + 1][0], self.sizes[s + 1][1]))
 
 				for j in range(self.args.D_step):

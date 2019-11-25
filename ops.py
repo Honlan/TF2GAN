@@ -32,7 +32,7 @@ def Reshape(target_shape):
 	return tk.layers.Reshape(target_shape)
 
 def flatten(x):
-	return tf.reshape(x, [tf.shape(x)[0], -1])
+	return tf.reshape(x, [x.shape[0], -1])
 
 def Flatten():
 	return tk.layers.Flatten()
@@ -48,6 +48,34 @@ def Conv2d(filters, kernel_size, strides, padding='same', dilation_rate=1, activ
 
 def Deconv2d(filters, kernel_size, strides=2, padding='same', dilation_rate=1, activation=None, use_bias=True, kernel_initializer='glorot_uniform', bias_initializer='zeros'):
 	return tk.layers.Conv2DTranspose(filters=filters, kernel_size=kernel_size, strides=strides, padding=padding, dilation_rate=dilation_rate, activation=activation, use_bias=use_bias, kernel_initializer=kernel_initializer, bias_initializer=bias_initializer)
+
+def Dropout(rate):
+	return tk.layers.Dropout(rate)
+
+class Resblock(tk.Model):
+	def __init__(self, filters=256, kernel_size=3, norm='in', dropout=False, dropout_rate=0.5):
+		super(Resblock, self).__init__()
+		self.conv1 = Conv2d(filters, kernel_size, 1)
+		self.conv2 = Conv2d(filters, kernel_size, 1)
+
+		if norm == 'bn':
+			self.norm1 = BN()
+			self.norm2 = BN()
+		elif norm == 'in':
+			self.norm1 = IN()
+			self.norm2 = IN()
+
+		self.dropout = dropout
+		if self.dropout:
+			self.drop = Dropout(dropout_rate)
+
+	def call(self, x):
+		h = relu(self.norm1(self.conv1(x)))
+		
+		if self.dropout:
+			h = self.drop(h)
+
+		return x + self.norm2(self.conv2(h))
 
 # Normalizations
 
@@ -150,3 +178,63 @@ def gradient_penalty(D, inter_sample, w_gp=10):
 
 def lerp_tf(start, end, ratio):
 	return start + (end - start) * tf.clip_by_value(ratio, 0.0, 1.0)
+
+def get_pixel_value(img, x, y): # img: N, H, W, C; x: N, H, W; y: N, H, W
+	N, H, W = x.shape
+	return tf.gather_nd(img, tf.stack([tf.tile(tf.reshape(tf.range(0, N), (N, 1, 1)), (1, H, W)), y, x], 3))
+
+def grid_sample(img, x, y):
+	_, H, W, _ = img.shape
+	max_y = tf.cast(H - 1, 'int32')
+	max_x = tf.cast(W - 1, 'int32')
+
+	x = 0.5 * ((tf.cast(x, 'float32') + 1.0) * tf.cast(max_x - 1, 'float32'))
+	y = 0.5 * ((tf.cast(y, 'float32') + 1.0) * tf.cast(max_y - 1, 'float32'))
+
+	x0 = tf.clip_by_value(tf.cast(tf.floor(x), 'int32'), 0, max_x)
+	x1 = tf.clip_by_value(x0 + 1, 0, max_x)
+	y0 = tf.clip_by_value(tf.cast(tf.floor(y), 'int32'), 0, max_y)
+	y1 = tf.clip_by_value(y0 + 1, 0, max_y)
+
+	Ia = get_pixel_value(img, x0, y0)
+	Ib = get_pixel_value(img, x0, y1)
+	Ic = get_pixel_value(img, x1, y0)
+	Id = get_pixel_value(img, x1, y1)
+
+	x0 = tf.cast(x0, 'float32')
+	x1 = tf.cast(x1, 'float32')
+	y0 = tf.cast(y0, 'float32')
+	y1 = tf.cast(y1, 'float32')
+
+	wa = tf.expand_dims((x1 - x) * (y1 - y), -1)
+	wb = tf.expand_dims((x1 - x) * (y - y0), -1)
+	wc = tf.expand_dims((x - x0) * (y1 - y), -1)
+	wd = tf.expand_dims((x - x0) * (y - y0), -1)
+
+	return tf.add_n([wa * Ia, wb * Ib, wc * Ic, wd * Id])
+
+def gram_matrix(x):
+	N, H, W, C = x.shape
+	x = tf.reshape(x, (N, H * W, C))
+	return tf.matmul(tf.transpose(x, (0, 2, 1)), x) / (H * W * C)
+
+def gram_mse(x, y):
+	return tf.reduce_mean(tf.square(gram_matrix(x) - gram_matrix(y)))
+
+def roi_align(features, boxes, indices, img_size, output_size):
+	output_size[0] = output_size[0] * 2
+	output_size[1] = output_size[1] * 2
+
+	x0, y0, x1, y1 = tf.split(boxes, 4, axis=-1)
+	binW = (x1 - x0) / output_size[1]
+	binH = (y1 - y0) / output_size[0]
+
+	nx0 = (x0 + binW / 2 - 0.5) / (img_size[1] - 1)
+	ny0 = (y0 + binH / 2 - 0.5) / (img_size[0] - 1)
+	nW = binW * (output_size[1] - 1) / (img_size[1] - 1)
+	nH = binH * (output_size[0] - 1) / (img_size[0] - 1)
+
+	new_boxes = tf.concat([ny0, nx0, ny0 + nH, nx0 + nW], axis=-1)
+	sampled = tf.image.crop_and_resize(features, new_boxes, indices, output_size)
+
+	return tf.nn.avg_pool2d(sampled, 2, 2, padding='VALID')

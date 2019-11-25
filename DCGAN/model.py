@@ -16,7 +16,7 @@ class Model(tk.Model):
 
 	def generator(self):
 		return tk.Sequential([
-			Input((self.args.z_dim,)),
+			Input((self.args.z_dim)),
 			Dense(4 * 4 * 512), Reshape((4, 4, 512)), BN(), Relu(),
 			Deconv2d(256, 5), BN(), Relu(),
 			Deconv2d(128, 5), BN(), Relu(),
@@ -25,7 +25,7 @@ class Model(tk.Model):
 
 	def discriminator(self):
 		return tk.Sequential([
-			Input((self.args.img_size, self.args.img_size, self.args.img_nc,)),
+			Input((self.args.img_size, self.args.img_size, self.args.img_nc)),
 			Conv2d(64, 5, 2), Lrelu(),
 			Conv2d(128, 5, 2), BN(), Lrelu(),
 			Conv2d(256, 5, 2), BN(), Lrelu(),
@@ -41,6 +41,8 @@ class Model(tk.Model):
 
 			self.optimizer_g = tk.optimizers.Adam(learning_rate=self.args.lr, beta_1=0.5)
 			self.optimizer_d = tk.optimizers.Adam(learning_rate=self.args.lr, beta_1=0.5)
+			self.vars_g = self.G.trainable_variables
+			self.vars_d = self.D.trainable_variables
 
 			self.summary_writer = tf.summary.create_file_writer(self.args.log_dir)
 			self.seed = tf.random.uniform([self.args.batch_size, self.args.z_dim], -1., 1.)
@@ -54,18 +56,17 @@ class Model(tk.Model):
 		for i in range(self.args.iteration):
 			batch = next(self.iter)
 			noise = tf.random.uniform([self.args.batch_size, self.args.z_dim], -1., 1.)
-
+			
 			with tf.GradientTape() as tape_g, tf.GradientTape() as tape_d:
 				fake = self.G(noise, training=True)
 				d_real = self.D(batch, training=True)
 				d_fake = self.D(fake, training=True)
 				loss_g = generator_loss(d_fake, self.args.gan_type)
 				loss_d = discriminator_loss(d_real, d_fake, self.args.gan_type)
-				print('iter: [%6d/%6d] time: %.2f loss_g: %.4f, loss_d: %.4f' % (
-					i, self.args.iteration, time.time() - start_time, loss_g.numpy(), loss_d.numpy()))
 
-			self.optimizer_g.apply_gradients(zip(tape_g.gradient(loss_g, self.G.trainable_variables), self.G.trainable_variables))
-			self.optimizer_d.apply_gradients(zip(tape_d.gradient(loss_d, self.D.trainable_variables), self.D.trainable_variables))
+			self.optimizer_g.apply_gradients(zip(tape_g.gradient(loss_g, self.vars_g), self.vars_g))
+			self.optimizer_d.apply_gradients(zip(tape_d.gradient(loss_d, self.vars_d), self.vars_d))
+			print('iter: [%6d/%6d] time: %.2f' % (i, self.args.iteration, time.time() - start_time))
 			
 			if (i + 1) % self.args.log_freq == 0:
 				with self.summary_writer.as_default():
