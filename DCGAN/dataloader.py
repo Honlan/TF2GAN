@@ -16,7 +16,9 @@ class Dataloader(object):
 		if args.dataset_name == 'celeba':
 			self.shorter_size = 178
 
-		AUTOTUNE = tf.data.experimental.AUTOTUNE
+		num_parallel_calls = 8
+		buffer_size = 100
+
 		if args.phase == 'tfrecord':
 			with tf.io.TFRecordWriter(self.tfrecord_path) as writer:
 				for img_path in self.img_paths:
@@ -28,7 +30,7 @@ class Dataloader(object):
 			dataset = tf.data.TFRecordDataset(self.tfrecord_path)
 			self.desc = {'img': tf.io.FixedLenFeature([], 'string')}
 			self.loader = dataset.shuffle(min(self.dataset_size, 10000)).repeat().map(
-				self.parse_example, AUTOTUNE).batch(self.batch_size).prefetch(AUTOTUNE)
+				self.parse_example, num_parallel_calls).batch(self.batch_size).prefetch(buffer_size)
 
 	def parse_example(self, example):
 		feature = tf.io.parse_single_example(example, self.desc)
