@@ -18,8 +18,11 @@ def imsave(save_path, img):
 def mimsave(save_path, imgs, fps=10):
 	imageio.mimsave(save_path, imgs, fps=fps)
 
-def imresize(img, h, w):
-	return cv2.resize(img, (w, h))
+def imresize(img, h, w, method='LINEAR'):
+	if method == 'LINEAR':
+		return cv2.resize(img, (w, h), interpolation=cv2.INTER_LINEAR)
+	elif method == 'NEAREST':
+		return cv2.resize(img, (w, h), interpolation=cv2.INTER_NEAREST)
 
 def imnorm(img):
 	return (img - 0.5) * 2.
@@ -46,3 +49,11 @@ def ceil(x):
 
 def floor(x):
 	return int(np.floor(x))
+
+def get_nonzero_center(img):
+	non = np.nonzero(img)
+	y0 = np.min(non[0])
+	y1 = np.max(non[0])
+	x0 = np.min(non[1])
+	x1 = np.max(non[1])
+	return (y0 + y1) // 2, (x0 + x1) // 2

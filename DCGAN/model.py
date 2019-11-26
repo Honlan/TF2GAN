@@ -11,7 +11,7 @@ from utils import *
 
 class Model(tk.Model):
 	def __init__(self, args):
-		super().__init__()
+		super(Model, self).__init__()
 		self.args = args
 
 	def generator(self):
