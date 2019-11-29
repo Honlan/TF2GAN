@@ -6,7 +6,7 @@ import os
 
 class Dataloader(object):
 	def __init__(self, args):
-		self.img_paths = glob(os.path.join('datasets', args.dataset_name, '*'))
+		self.img_paths = glob(os.path.join('dataset', args.dataset_name, '*'))
 		self.dataset_size = len(self.img_paths)
 		self.img_size = args.img_size
 		self.aug_size = int(self.img_size * 1.1)

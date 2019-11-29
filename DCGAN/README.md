@@ -2,7 +2,7 @@
 
 Deep Convolutional Generative Adversarial Network
 
-[arvix](https://arxiv.org/abs/1511.06434) [project](https://github.com/carpedm20/DCGAN-tensorflow)
+[paper](https://arxiv.org/abs/1511.06434) [project](https://github.com/carpedm20/DCGAN-tensorflow)
 
 ![](asset/teaser.png)
 

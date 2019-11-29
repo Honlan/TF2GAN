@@ -18,8 +18,8 @@ class Dataloader(object):
 		self.tfrecord_path = os.path.join('dataset', f'{args.dataset_name}.tfrec')
 
 		if args.dataset_name == 'CelebAMask19':
-			self.label_names = ['background', 'skin', 'nose', 'eye_g', 'l_eye', 'r_eye', 'l_brow', 'r_brow', 'l_ear', 'r_ear', \
-							    'mouth', 'u_lip', 'l_lip', 'hair', 'hat', 'ear_r', 'neck_l', 'neck', 'cloth']
+			self.label_names = ['background', 'skin', 'nose', 'eye_g', 'l_eye', 'r_eye', 'l_brow', 'r_brow', 'l_ear', 'r_ear', 
+								'mouth', 'u_lip', 'l_lip', 'hair', 'hat', 'ear_r', 'neck_l', 'neck', 'cloth']
 			self.label_nc = len(self.label_names)
 
 		num_parallel_calls = 8
@@ -61,5 +61,4 @@ class Dataloader(object):
 		data = tf.concat([img, label], -1)
 		data = tf.image.random_crop(data, (self.img_size, self.img_size, self.img_nc + self.label_nc))
 		img, label = data[:, :, :self.img_nc], data[:, :, self.img_nc:]
-		
 		return img, label

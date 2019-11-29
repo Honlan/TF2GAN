@@ -57,3 +57,6 @@ def get_nonzero_center(img):
 	x0 = np.min(non[1])
 	x1 = np.max(non[1])
 	return (y0 + y1) // 2, (x0 + x1) // 2
+
+def array_to_list(array):
+	return np.reshape(array, [array.size]).tolist()

@@ -9,9 +9,8 @@ sys.path.append('..')
 from ops import *
 from utils import *
 
-class Model(tk.Model):
+class Model(object):
 	def __init__(self, args):
-		super(Model, self).__init__()
 		self.args = args
 
 	def generator(self):
@@ -41,8 +40,6 @@ class Model(tk.Model):
 
 			self.optimizer_g = tk.optimizers.Adam(learning_rate=self.args.lr, beta_1=0.5)
 			self.optimizer_d = tk.optimizers.Adam(learning_rate=self.args.lr, beta_1=0.5)
-			self.vars_g = self.G.trainable_variables
-			self.vars_d = self.D.trainable_variables
 
 			self.summary_writer = tf.summary.create_file_writer(self.args.log_dir)
 			self.seed = tf.random.uniform([self.args.batch_size, self.args.z_dim], -1., 1.)
@@ -59,6 +56,8 @@ class Model(tk.Model):
 			loss_g = generator_loss(d_fake, self.args.gan_type)
 			loss_d = discriminator_loss(d_real, d_fake, self.args.gan_type)
 
+		self.vars_g = self.G.trainable_variables
+		self.vars_d = self.D.trainable_variables
 		self.optimizer_g.apply_gradients(zip(tape_g.gradient(loss_g, self.vars_g), self.vars_g))
 		self.optimizer_d.apply_gradients(zip(tape_d.gradient(loss_d, self.vars_d), self.vars_d))
 
@@ -96,11 +95,13 @@ class Model(tk.Model):
 		imsave(os.path.join(self.args.result_dir, 'result.jpg'), montage(imdenorm(result.numpy())))
 
 	def load_model(self, all_module=False):
-		self.G = tk.models.load_model(os.path.join(self.args.save_dir, 'G.h5'))
+		self.G = self.generator()
+		self.G.load_weights(os.path.join(self.args.save_dir, 'G.h5'))
 		
 		if all_module:
-			self.D = tk.models.load_model(os.path.join(self.args.save_dir, 'D.h5'))
+			self.D = self.discriminator()
+			self.D.load_weights(os.path.join(self.args.save_dir, 'D.h5'))
 
 	def save_model(self):
-		self.G.save(os.path.join(self.args.save_dir, 'G.h5'))
-		self.D.save(os.path.join(self.args.save_dir, 'D.h5'))
+		self.G.save_weights(os.path.join(self.args.save_dir, 'G.h5'))
+		self.D.save_weights(os.path.join(self.args.save_dir, 'D.h5'))

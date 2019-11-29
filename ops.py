@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import tensorflow as tf
+# import tensorflow_addons as tfa
 import tensorflow.keras as tk
 import numpy as np
 
@@ -50,13 +51,14 @@ def Conv2d(filters, kernel_size, strides, padding='same', sn=False, dilation_rat
 	return SN(conv) if sn else conv
 
 def Deconv2d(filters, kernel_size, strides=2, padding='same', sn=False, dilation_rate=1, activation=None, use_bias=True, kernel_initializer='glorot_uniform', bias_initializer='zeros'):
-	deconv = tk.layers.Conv2DTranspose(filters=filters, kernel_size=kernel_size, strides=strides, padding=padding, dilation_rate=dilation_rate, activation=activation, use_bias=use_bias, kernel_initializer=kernel_initializer, bias_initializer=bias_initializer)
-	return SN(deconv) if sn else deconv
+	# deconv = tk.layers.Conv2DTranspose(filters=filters, kernel_size=kernel_size, strides=strides, padding=padding, dilation_rate=dilation_rate, activation=activation, use_bias=use_bias, kernel_initializer=kernel_initializer, bias_initializer=bias_initializer)
+	# return SN(deconv) if sn else deconv
+	return tk.Sequential([UpSample(strides), Conv2d(filters, kernel_size, 1, padding, sn, dilation_rate, activation, use_bias, kernel_initializer, bias_initializer)])
 
 def Dropout(rate):
 	return tk.layers.Dropout(rate)
 
-class Resblock(tk.Model):
+class Resblock(tk.layers.Layer):
 	def __init__(self, filters=256, norm='in', dropout=False, dropout_rate=0.5):
 		super(Resblock, self).__init__()
 		self.conv1 = Conv2d(filters, 3, 1)
@@ -81,7 +83,7 @@ class Resblock(tk.Model):
 
 		return x + self.norm2(self.conv2(h))
 
-class SpadeResblock(tk.Model):
+class SpadeResblock(tk.layers.Layer):
 	def __init__(self, in_filters, out_filters, use_bias=True, sn=False):
 		super(SpadeResblock, self).__init__()
 		mid_filters = min(in_filters, out_filters)
@@ -97,7 +99,8 @@ class SpadeResblock(tk.Model):
 			self.conv3 = Conv2d(out_filters, 1, 1, use_bias=False, sn=sn)
 
 	def call(self, m, x):
-		h = self.conv2(lrelu(self.spade2(m, self.conv1(lrelu(self.spade1(m, x))))))
+		h = self.conv1(lrelu(self.spade1(m, x)))
+		h = self.conv2(lrelu(self.spade2(m, h)))
 		
 		if self.shortcut:
 			x = self.conv3(self.spade3(m, x))
@@ -123,6 +126,9 @@ class IN(tk.layers.Layer):
 		inv = tf.math.rsqrt(variance + self.epsilon)
 		normalized = (x - mean) * inv
 		return self.scale * normalized + self.offset
+
+# def IN():
+	# return tfa.layers.InstanceNormalization()
 
 class SN(tk.layers.Wrapper): # https://github.com/thisisiron/spectral_normalization-tf2
 	def __init__(self, layer, iteration=1, eps=1e-12, training=True, **kwargs):
@@ -177,9 +183,6 @@ class AdaIN(tk.layers.Layer):
 		super(AdaIN, self).__init__()
 		self.epsilon = 1e-5
 
-	def build(self, input_shape):
-		pass
-
 	def call(self, x, scale, offset):
 		mean, variance = tf.nn.moments(x, axes=[1, 2], keepdims=True)
 		inv = tf.math.rsqrt(variance + self.epsilon)
@@ -191,7 +194,7 @@ def param_free_norm(x, epsilon=1e-5):
 	std = tf.sqrt(var + epsilon)
 	return (x - mean) / std
 
-class Spade(tk.Model):
+class Spade(tk.layers.Layer):
 	def __init__(self, filters, use_bias=True, sn=False):
 		super(Spade, self).__init__()
 		self.conv = Conv2d(128, 5, 1, use_bias=use_bias, sn=sn)
@@ -212,17 +215,21 @@ def l1_loss(x, y):
 def l2_loss(x, y):
 	return tf.reduce_mean(tf.square(x - y))
 
+def c_loss(labels, logits, binary=True):
+	ce = tk.losses.BinaryCrossentropy(from_logits=True) if binary else tk.losses.CategoricalCrossentropy(from_logits=True)
+	return ce(labels, logits)
+
 def discriminator_loss(real, fake, gan_type, multi_scale=False):
 	if not multi_scale:
 		real = [real]
 		fake = [fake]
 
-	cross_entropy = tk.losses.BinaryCrossentropy(from_logits=True)
+	bce = tk.losses.BinaryCrossentropy(from_logits=True)
 	loss = []
 	for i in range(len(fake)):
 		if gan_type == 'vanilla':
-			loss_real = cross_entropy(tf.ones_like(real[i]), real[i])
-			loss_fake = cross_entropy(tf.zeros_like(fake[i]), fake[i])
+			loss_real = bce(tf.ones_like(real[i]), real[i])
+			loss_fake = bce(tf.zeros_like(fake[i]), fake[i])
 		elif gan_type == 'lsgan':
 			loss_real = tf.reduce_mean(tf.square(real[i] - 1.0))
 			loss_fake = tf.reduce_mean(tf.square(fake[i]))
@@ -240,11 +247,11 @@ def generator_loss(fake, gan_type, multi_scale=False):
 	if not multi_scale:
 		fake = [fake]
 
-	cross_entropy = tk.losses.BinaryCrossentropy(from_logits=True)
+	bce = tk.losses.BinaryCrossentropy(from_logits=True)
 	loss = []
 	for i in range(len(fake)):
 		if gan_type == 'vanilla':
-			loss_fake = cross_entropy(tf.ones_like(fake[i]), fake[i])
+			loss_fake = bce(tf.ones_like(fake[i]), fake[i])
 		elif gan_type == 'lsgan':
 			loss_fake = tf.reduce_mean(tf.square(fake[i] - 1.0))
 		elif gan_type == 'hinge':
@@ -277,6 +284,9 @@ def feature_loss(real, fake):
 		loss.append(sub_loss)
 	return tf.reduce_mean(loss)
 
+def tv_loss(x):
+    return l1_loss(x[:, :-1, :, :], x[:, 1:, :, :]) + l1_loss(x[:, :, :-1, :], x[:, :, 1:, :])
+
 # Others
 
 def z_sample(mean, logvar):
@@ -292,6 +302,9 @@ def AvgPool2d(strides=2):
 def up_sample(x, scale_factor=2):
 	_, h, w, _ = x.shape
 	return tf.image.resize(x, [h * scale_factor, w * scale_factor])
+
+def UpSample(size=2):
+	return tk.layers.UpSampling2D(size=size)
 
 def lerp_tf(start, end, ratio):
 	return start + (end - start) * tf.clip_by_value(ratio, 0.0, 1.0)

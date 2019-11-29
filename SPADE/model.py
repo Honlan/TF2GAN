@@ -31,23 +31,21 @@ class decoder(tk.Model):
 
 		return self.conv(lrelu(h))
 
-class Model(tk.Model):
+class Model(object):
 	def __init__(self, args):
-		super(Model, self).__init__()
 		args.dis_scale = args.img_size // 128
 		self.args = args
 
 	def encoder(self):
 		x = Input((self.args.img_size, self.args.img_size, self.args.img_nc))
-		down = tk.Sequential([x,
+		h = tk.Sequential([x,
 			Conv2d(64,  3, 2, sn=True), IN(), Lrelu(),
 			Conv2d(128, 3, 2, sn=True), IN(), Lrelu(),
 			Conv2d(256, 3, 2, sn=True), IN(), Lrelu(),
 			Conv2d(512, 3, 2, sn=True), IN(), Lrelu(),
 			Conv2d(512, 3, 2, sn=True), IN(), Lrelu(),
-			Conv2d(512, 3, 2, sn=True), IN(), Lrelu()])
+			Conv2d(512, 3, 2, sn=True), IN(), Lrelu()]).output
 
-		h = down.output
 		mean = Dense(256, sn=True)(flatten(h))
 		var  = Dense(256, sn=True)(flatten(h))
 
@@ -113,7 +111,6 @@ class Model(tk.Model):
 		elif self.args.phase == 'test':
 			self.load_model()
 
-	@tf.function
 	def vgg_loss(self, real, fake):
 		real_features = self.vgg(vgg19.preprocess_input((real + 1.) * 127.5))
 		fake_features = self.vgg(vgg19.preprocess_input((fake + 1.) * 127.5))
@@ -241,12 +238,7 @@ class Model(tk.Model):
 		return one_hot
 
 	def multi_to_one(self, data):
-		img_size = self.args.img_size
-		result = np.zeros((img_size, img_size))
-		for i in range(img_size):
-			for j in range(img_size):
-				result[i, j] = np.argmax(data[i, j, :]) / (self.args.label_nc - 1)
-		return np.expand_dims(result, -1)
+		return np.expand_dims(np.argmax(data, -1) / (self.args.label_nc - 1), -1)
 
 	def load_model(self, all_module=False):
 		self.E = tk.models.load_model(os.path.join(self.args.save_dir, 'E.h5'))

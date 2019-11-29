@@ -7,7 +7,7 @@ Pretrained models: [Baidu Drive](https://pan.baidu.com/s/1du4zZQk2pmvcX7GAwsTTnQ
 
 ### [DCGAN](DCGAN/) (Deep Convolutional Generative Adversarial Network)
 
-[arvix](https://arxiv.org/abs/1511.06434) [project](https://github.com/carpedm20/DCGAN-tensorflow)
+[paper](https://arxiv.org/abs/1511.06434) [project](https://github.com/carpedm20/DCGAN-tensorflow)
 
 ![](DCGAN/asset/teaser.png)
 
