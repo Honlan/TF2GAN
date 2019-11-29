@@ -84,6 +84,7 @@ class Model(object):
 		with tf.GradientTape() as tape_g, tf.GradientTape() as tape_d:
 			a_fake, fake = self.G([img, label_ - label])
 			a_cyc, cyc = self.G([fake, label - label_])
+			_, rec = self.G([img, tf.zeros_like(label)])
 
 			d_real, c_real = self.D(img)
 			d_fake, c_fake = self.D(fake)
@@ -95,20 +96,21 @@ class Model(object):
 			loss_g_cls = self.args.w_cls * c_loss(label_, c_fake)
 
 			loss_g_cyc = self.args.w_cyc * l1_loss(img, cyc)
+			loss_g_rec = self.args.w_rec * l1_loss(img, rec)
 
 			loss_g_a = self.args.w_a * (l1_loss(a_fake, 0) + l1_loss(a_cyc, 0))
 			loss_g_tv = self.args.w_tv * (tv_loss(a_fake) + tv_loss(a_cyc))
 
 			loss_d = loss_d_adv + loss_d_cls
-			loss_g = loss_g_adv + loss_g_cls + loss_g_cyc + loss_g_a + loss_g_tv
+			loss_g = loss_g_adv + loss_g_cls + loss_g_cyc + loss_g_rec + loss_g_a + loss_g_tv
 
 		self.vars_g = self.G.trainable_variables
 		self.vars_d = self.D.trainable_variables
 		self.optimizer_d.apply_gradients(zip(tape_d.gradient(loss_d, self.vars_d), self.vars_d))
 		self.optimizer_g.apply_gradients(zip(tape_g.gradient(loss_g, self.vars_g), self.vars_g))
 
-		item = {'loss_g_adv': loss_g_adv, 'loss_g_cls': loss_g_cls, 'loss_g_cyc': loss_g_cyc, 'loss_g_a': loss_g_a, 'loss_g_tv': loss_g_tv,
-				'loss_d_adv': loss_d_adv, 'loss_d_cls': loss_d_cls}
+		item = {'loss_g_adv': loss_g_adv, 'loss_g_cls': loss_g_cls, 'loss_g_cyc': loss_g_cyc, 'loss_g_rec': loss_g_rec,
+				'loss_g_a': loss_g_a, 'loss_g_tv': loss_g_tv, 'loss_d_adv': loss_d_adv, 'loss_d_cls': loss_d_cls}
 		
 		return item
 
@@ -131,6 +133,7 @@ class Model(object):
 						tf.summary.scalar('loss_g_adv', item['loss_g_adv'], step=step)
 						tf.summary.scalar('loss_g_cls', item['loss_g_cls'], step=step)
 						tf.summary.scalar('loss_g_cyc', item['loss_g_cyc'], step=step)
+						tf.summary.scalar('loss_g_rec', item['loss_g_rec'], step=step)
 						tf.summary.scalar('loss_g_a',   item['loss_g_a'], step=step)
 						tf.summary.scalar('loss_g_tv',  item['loss_g_tv'], step=step)
 						tf.summary.scalar('loss_d_adv', item['loss_d_adv'], step=step)

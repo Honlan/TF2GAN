@@ -22,6 +22,7 @@ def parse_args():
 	parser.add_argument('--w_adv', type=float, default=1)
 	parser.add_argument('--w_cls', type=float, default=10)
 	parser.add_argument('--w_cyc', type=float, default=10)
+	parser.add_argument('--w_rec', type=float, default=10)
 	parser.add_argument('--w_a', type=float, default=1)
 	parser.add_argument('--w_tv', type=float, default=2.5)
 
