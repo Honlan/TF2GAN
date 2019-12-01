@@ -144,7 +144,7 @@ class Model(object):
 				label_ = label.numpy()
 				label_[:, j] = 1. - label_[:, j]
 
-				a_fake, fake = self.G([img, label_- label])
+				a_fake, fake = self.G([img, label_ - label])
 				fake = imdenorm(fake.numpy())
 				a_fake = a_fake.numpy()
 				for i in range(self.args.batch_size):

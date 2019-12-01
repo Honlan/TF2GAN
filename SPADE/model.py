@@ -38,6 +38,7 @@ class Model(object):
 
 	def encoder(self):
 		x = Input((self.args.img_size, self.args.img_size, self.args.img_nc))
+
 		h = tk.Sequential([x,
 			Conv2d(64,  3, 2, sn=True), IN(), Lrelu(),
 			Conv2d(128, 3, 2, sn=True), IN(), Lrelu(),
@@ -63,8 +64,8 @@ class Model(object):
 			sub_logits.append(h)
 
 			for j in range(1, self.args.dis_layer):
-				stride = 1 if j == self.args.dis_layer - 1 else 2
-				h = lrelu(IN()(Conv2d(filters * 2, 4, stride, sn=True)(h)))
+				strides = 1 if j == self.args.dis_layer - 1 else 2
+				h = lrelu(IN()(Conv2d(filters * 2, 4, strides, sn=True)(h)))
 				sub_logits.append(h)
 				filters = min(filters * 2, 512)
 
@@ -76,9 +77,10 @@ class Model(object):
 		return tk.Model(x_init, logits)
 
 	def build_model(self):
+		dataloader = Dataloader(self.args)
+		self.args.label_nc = dataloader.label_nc
+
 		if self.args.phase == 'train':
-			dataloader = Dataloader(self.args)
-			self.args.label_nc = dataloader.label_nc
 			self.iter = iter(dataloader.loader)
 
 			self.E = self.encoder()
@@ -97,8 +99,6 @@ class Model(object):
 			lr_d = tk.optimizers.schedules.PiecewiseConstantDecay(boundaries, values_d)
 			self.optimizer_g = tk.optimizers.Adam(learning_rate=lr_g, beta_1=0.0, beta_2=0.9)
 			self.optimizer_d = tk.optimizers.Adam(learning_rate=lr_d, beta_1=0.0, beta_2=0.9)
-			self.vars_g = self.E.trainable_variables + self.G.trainable_variables
-			self.vars_d = self.D.trainable_variables
 
 			self.vgg = VGG19(include_top=False, weights='imagenet')
 			self.vgg.trainable = False
@@ -111,6 +111,7 @@ class Model(object):
 		elif self.args.phase == 'test':
 			self.load_model()
 
+	@tf.function
 	def vgg_loss(self, real, fake):
 		real_features = self.vgg(vgg19.preprocess_input((real + 1.) * 127.5))
 		fake_features = self.vgg(vgg19.preprocess_input((fake + 1.) * 127.5))
@@ -139,6 +140,8 @@ class Model(object):
 			loss_g = loss_g_adv + loss_g_vgg + loss_g_fm + loss_g_kl
 			loss_d = loss_d_adv
 
+		self.vars_g = self.E.trainable_variables + self.G.trainable_variables
+		self.vars_d = self.D.trainable_variables
 		self.optimizer_g.apply_gradients(zip(tape_g.gradient(loss_g, self.vars_g), self.vars_g))
 		self.optimizer_d.apply_gradients(zip(tape_d.gradient(loss_d, self.vars_d), self.vars_d))
 
@@ -241,14 +244,16 @@ class Model(object):
 		return np.expand_dims(np.argmax(data, -1) / (self.args.label_nc - 1), -1)
 
 	def load_model(self, all_module=False):
-		self.E = tk.models.load_model(os.path.join(self.args.save_dir, 'E.h5'))
+		self.E = self.encoder()
+		self.E.load_weights(os.path.join(self.args.save_dir, 'E.h5'))
 		self.G = decoder()
 		self.G.load_weights(os.path.join(self.args.save_dir, 'G.h5'))
 		
 		if all_module:
-			self.D = tk.models.load_model(os.path.join(self.args.save_dir, 'D.h5'))
+			self.D = self.discriminator(self.args.img_nc + self.args.label_nc)
+			self.D.load_weights(os.path.join(self.args.save_dir, 'D.h5'))
 
 	def save_model(self):
-		self.E.save(os.path.join(self.args.save_dir, 'E.h5'))
+		self.E.save_weights(os.path.join(self.args.save_dir, 'E.h5'))
 		self.G.save_weights(os.path.join(self.args.save_dir, 'G.h5'))
-		self.D.save(os.path.join(self.args.save_dir, 'D.h5'))
+		self.D.save_weights(os.path.join(self.args.save_dir, 'D.h5'))

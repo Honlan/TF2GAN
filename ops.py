@@ -51,9 +51,9 @@ def Conv2d(filters, kernel_size, strides, padding='same', sn=False, dilation_rat
 	return SN(conv) if sn else conv
 
 def Deconv2d(filters, kernel_size, strides=2, padding='same', sn=False, dilation_rate=1, activation=None, use_bias=True, kernel_initializer='glorot_uniform', bias_initializer='zeros'):
-	# deconv = tk.layers.Conv2DTranspose(filters=filters, kernel_size=kernel_size, strides=strides, padding=padding, dilation_rate=dilation_rate, activation=activation, use_bias=use_bias, kernel_initializer=kernel_initializer, bias_initializer=bias_initializer)
-	# return SN(deconv) if sn else deconv
-	return tk.Sequential([UpSample(strides), Conv2d(filters, kernel_size, 1, padding, sn, dilation_rate, activation, use_bias, kernel_initializer, bias_initializer)])
+	deconv = tk.layers.Conv2DTranspose(filters=filters, kernel_size=kernel_size, strides=strides, padding=padding, dilation_rate=dilation_rate, activation=activation, use_bias=use_bias, kernel_initializer=kernel_initializer, bias_initializer=bias_initializer)
+	return SN(deconv) if sn else deconv
+	# return tk.Sequential([UpSample(strides), Conv2d(filters, kernel_size, 1, padding, sn, dilation_rate, activation, use_bias, kernel_initializer, bias_initializer)])
 
 def Dropout(rate):
 	return tk.layers.Dropout(rate)
@@ -131,23 +131,17 @@ class IN(tk.layers.Layer):
 	# return tfa.layers.InstanceNormalization()
 
 class SN(tk.layers.Wrapper): # https://github.com/thisisiron/spectral_normalization-tf2
-	def __init__(self, layer, iteration=1, eps=1e-12, training=True, **kwargs):
+	def __init__(self, layer, iteration=1, **kwargs):
 		self.iteration = iteration
-		self.eps = eps
-		self.do_power_iteration = training
 		super(SN, self).__init__(layer, **kwargs)
 
 	def build(self, input_shape):
 		self.layer.build(input_shape)
 		self.w = self.layer.kernel
-		self.w_shape = self.w.shape.as_list()
+		self.w_shape = self.w.shape
 
 		self.u = self.add_weight(shape=(1, self.w_shape[-1]), initializer=tf.initializers.TruncatedNormal(stddev=0.02),
 			trainable=False, name='sn_u', dtype=tf.float32)
-
-		shape = self.w_shape[0] if len(self.w_shape) == 2 else self.w_shape[0] * self.w_shape[1] * self.w_shape[2]
-		self.v = self.add_weight(shape=(1, shape), initializer=tf.initializers.TruncatedNormal(stddev=0.02), 
-			trainable=False, name='sn_v', dtype=tf.float32)
 		
 		super(SN, self).build()
 
@@ -160,19 +154,18 @@ class SN(tk.layers.Wrapper): # https://github.com/thisisiron/spectral_normalizat
 	def update_weights(self):
 		w_reshaped = tf.reshape(self.w, [-1, self.w_shape[-1]])
 		u_hat = self.u
-		v_hat = self.v
 
-		if self.do_power_iteration:
-			for _ in range(self.iteration):
-				v_ = tf.matmul(u_hat, tf.transpose(w_reshaped))
-				v_hat = v_ / (tf.reduce_sum(v_ ** 2) ** 0.5 + self.eps)
+		for _ in range(self.iteration):
+			v_ = tf.matmul(u_hat, tf.transpose(w_reshaped))
+			v_hat = tf.nn.l2_normalize(v_)
+			u_ = tf.matmul(v_hat, w_reshaped)
+			u_hat = tf.nn.l2_normalize(u_)
 
-				u_ = tf.matmul(v_hat, w_reshaped)
-				u_hat = u_ / (tf.reduce_sum(u_ ** 2) ** 0.5 + self.eps)
+		u_hat = tf.stop_gradient(u_hat)
+		v_hat = tf.stop_gradient(v_hat)
 
 		sigma = tf.matmul(tf.matmul(v_hat, w_reshaped), tf.transpose(u_hat))
 		self.u.assign(u_hat)
-		self.v.assign(v_hat)
 		self.layer.kernel.assign(self.w / sigma)
 
 	def restore_weights(self):

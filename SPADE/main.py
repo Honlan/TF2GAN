@@ -20,7 +20,7 @@ def parse_args():
 	parser.add_argument('--dis_layer', type=int, default=4)
 	parser.add_argument('--gan_type', type=str, default='hinge', choices=('vanilla', 'lsgan', 'hinge'))
 	parser.add_argument('--w_adv', type=float, default=1)
-	parser.add_argument('--w_vgg', type=float, default=10)
+	parser.add_argument('--w_vgg', type=float, default=0.05)
 	parser.add_argument('--w_fm', type=float, default=10)
 	parser.add_argument('--w_kl', type=float, default=0.05)
 

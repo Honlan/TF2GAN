@@ -2,7 +2,7 @@
 
 import tensorflow as tf
 from glob import glob
-import os, random
+import os
 
 class Dataloader(object):
 	def __init__(self, args):
