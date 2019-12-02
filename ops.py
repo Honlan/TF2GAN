@@ -145,26 +145,25 @@ class SN(tk.layers.Wrapper):
 		
 		super(SN, self).build()
 
-	def call(self, inputs):
+	def call(self, inputs, training=True):
 		self.update_weights(training)
 		output = self.layer(inputs)
 		self.restore_weights()
 		return output
 
-	def update_weights(self):
+	def update_weights(self, training):
 		self.w = tf.stop_gradient(self.layer.kernel)
 		w_reshaped = tf.reshape(self.w, [-1, self.w_shape[-1]])
 		u_hat = self.u
 
 		for _ in range(self.iteration):
-			v_ = tf.matmul(u_hat, tf.transpose(w_reshaped))
-			v_hat = tf.nn.l2_normalize(v_)
-			u_ = tf.matmul(v_hat, w_reshaped)
-			u_hat = tf.nn.l2_normalize(u_)
+			v_hat = tf.nn.l2_normalize(tf.matmul(u_hat, tf.transpose(w_reshaped)))
+			u_hat = tf.nn.l2_normalize(tf.matmul(v_hat, w_reshaped))
+
+		if training:
+			self.u.assign(u_hat)
 
 		sigma = tf.matmul(tf.matmul(v_hat, w_reshaped), tf.transpose(u_hat))
-
-		self.u.assign(u_hat)
 		self.layer.kernel.assign(self.w / sigma)
 
 	def restore_weights(self):
