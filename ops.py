@@ -130,28 +130,29 @@ class IN(tk.layers.Layer):
 # def IN():
 	# return tfa.layers.InstanceNormalization()
 
-class SN(tk.layers.Wrapper): # https://github.com/thisisiron/spectral_normalization-tf2
+class SN(tk.layers.Wrapper):
 	def __init__(self, layer, iteration=1, **kwargs):
 		self.iteration = iteration
 		super(SN, self).__init__(layer, **kwargs)
 
 	def build(self, input_shape):
-		self.layer.build(input_shape)
-		self.w = self.layer.kernel
-		self.w_shape = self.w.shape
-
-		self.u = self.add_weight(shape=(1, self.w_shape[-1]), initializer=tf.initializers.TruncatedNormal(stddev=0.02),
+		if not self.layer.built:
+			self.layer.build(input_shape)
+		
+		self.w_shape = self.layer.kernel.shape
+		self.u = self.add_weight(shape=(1, self.w_shape[-1]), initializer=tf.random_normal_initializer(),
 			trainable=False, name='sn_u', dtype=tf.float32)
 		
 		super(SN, self).build()
 
 	def call(self, inputs):
-		self.update_weights()
+		self.update_weights(training)
 		output = self.layer(inputs)
 		self.restore_weights()
 		return output
 
 	def update_weights(self):
+		self.w = tf.stop_gradient(self.layer.kernel)
 		w_reshaped = tf.reshape(self.w, [-1, self.w_shape[-1]])
 		u_hat = self.u
 
@@ -161,10 +162,8 @@ class SN(tk.layers.Wrapper): # https://github.com/thisisiron/spectral_normalizat
 			u_ = tf.matmul(v_hat, w_reshaped)
 			u_hat = tf.nn.l2_normalize(u_)
 
-		u_hat = tf.stop_gradient(u_hat)
-		v_hat = tf.stop_gradient(v_hat)
-
 		sigma = tf.matmul(tf.matmul(v_hat, w_reshaped), tf.transpose(u_hat))
+
 		self.u.assign(u_hat)
 		self.layer.kernel.assign(self.w / sigma)
 
