@@ -2,6 +2,7 @@
 
 import tensorflow as tf
 import tensorflow.keras as tk
+import numpy as np
 import time
 from dataloader import Dataloader
 import sys
@@ -46,10 +47,11 @@ class Model(object):
 		filters = 64
 		for i in range(dis_layer):
 			h = lrelu(Conv2d(filters, 4, 2)(h))
-			filters *= 2
+			filters = min(filters * 2, 512)
 
 		logit = Conv2d(1, 3, 1)(h)
-		c = tf.reshape(Conv2d(self.args.label_nc, self.args.img_size // 2 ** dis_layer, 1, padding='valid')(h), [-1, self.args.label_nc])
+		kernel_size = self.args.img_size // 2 ** dis_layer
+		c = tf.reshape(Conv2d(self.args.label_nc, kernel_size, 1, padding='valid')(h), [-1, self.args.label_nc])
 
 		return tk.Model(x, [logit, c])
 
@@ -57,8 +59,6 @@ class Model(object):
 		if self.args.phase == 'train':
 			dataloader = Dataloader(self.args)
 			self.args.iteration = dataloader.dataset_size // self.args.batch_size 
-			self.args.attrs = dataloader.attrs
-			self.args.label_nc = dataloader.label_nc
 			self.iter = iter(dataloader.loader)
 
 			self.G = self.generator()
@@ -77,10 +77,11 @@ class Model(object):
 			self.summary_writer = tf.summary.create_file_writer(self.args.log_dir)
 		
 		elif self.args.phase == 'test':
-			self.load_model()
+			self.img = Dataloader(self.args).img
+			self.load()
 
 	@tf.function
-	def train_one_step(self, img, label, label_):
+	def train_step(self, img, label, label_):
 		with tf.GradientTape() as tape_g, tf.GradientTape() as tape_d:
 			a_fake, fake = self.G([img, label_ - label])
 			a_cyc, cyc = self.G([fake, label - label_])
@@ -104,15 +105,13 @@ class Model(object):
 			loss_d = loss_d_adv + loss_d_cls
 			loss_g = loss_g_adv + loss_g_cls + loss_g_cyc + loss_g_rec + loss_g_a + loss_g_tv
 
-		self.vars_g = self.G.trainable_variables
-		self.vars_d = self.D.trainable_variables
-		self.optimizer_d.apply_gradients(zip(tape_d.gradient(loss_d, self.vars_d), self.vars_d))
-		self.optimizer_g.apply_gradients(zip(tape_g.gradient(loss_g, self.vars_g), self.vars_g))
+		vars_g = self.G.trainable_variables
+		vars_d = self.D.trainable_variables
+		self.optimizer_g.apply_gradients(zip(tape_g.gradient(loss_g, vars_g), vars_g))
+		self.optimizer_d.apply_gradients(zip(tape_d.gradient(loss_d, vars_d), vars_d))
 
-		item = {'loss_g_adv': loss_g_adv, 'loss_g_cls': loss_g_cls, 'loss_g_cyc': loss_g_cyc, 'loss_g_rec': loss_g_rec,
+		return {'loss_g_adv': loss_g_adv, 'loss_g_cls': loss_g_cls, 'loss_g_cyc': loss_g_cyc, 'loss_g_rec': loss_g_rec,
 				'loss_g_a': loss_g_a, 'loss_g_tv': loss_g_tv, 'loss_d_adv': loss_d_adv, 'loss_d_cls': loss_d_cls}
-		
-		return item
 
 	def train(self):
 		start_time = time.time()
@@ -123,7 +122,7 @@ class Model(object):
 				img, label = next(self.iter)
 				label_ = tf.random.shuffle(label)
 
-				item = self.train_one_step(img, label, label_)
+				item = self.train_step(img, label, label_)
 				print('epoch: [%3d/%3d] iter: [%6d/%6d] time: %.2f' % (e, self.args.epochs + self.args.decay_epochs, 
 					i, self.args.iteration, time.time() - start_time))
 				step += 1
@@ -134,8 +133,8 @@ class Model(object):
 						tf.summary.scalar('loss_g_cls', item['loss_g_cls'], step=step)
 						tf.summary.scalar('loss_g_cyc', item['loss_g_cyc'], step=step)
 						tf.summary.scalar('loss_g_rec', item['loss_g_rec'], step=step)
-						tf.summary.scalar('loss_g_a',   item['loss_g_a'], step=step)
-						tf.summary.scalar('loss_g_tv',  item['loss_g_tv'], step=step)
+						tf.summary.scalar('loss_g_a',   item['loss_g_a'],   step=step)
+						tf.summary.scalar('loss_g_tv',  item['loss_g_tv'],  step=step)
 						tf.summary.scalar('loss_d_adv', item['loss_d_adv'], step=step)
 						tf.summary.scalar('loss_d_cls', item['loss_d_cls'], step=step)
 
@@ -159,17 +158,25 @@ class Model(object):
 			self.save_model()
 
 	def test(self):
-		result = self.G(tf.random.uniform([self.args.batch_size, self.args.z_dim], -1., 1.), training=False)
-		imsave(os.path.join(self.args.result_dir, 'result.jpg'), montage(imdenorm(result.numpy())))
-
-	def load_model(self, all_module=False):
-		self.G = self.generator()
-		self.G.load_weights(os.path.join(self.args.save_dir, 'G.h5'))
+		img_size = self.args.img_size
+		result = np.ones((2 * img_size, (self.args.label_nc + 1) * img_size, self.args.img_nc))
 		
-		if all_module:
-			self.D = self.discriminator()
-			self.D.load_weights(os.path.join(self.args.save_dir, 'D.h5'))
+		for i in range(self.args.label_nc):
+			diff = np.zeros((1, self.args.label_nc), 'float32')
+			diff[:, i] = 1.
+			_, fake = self.G([img, diff])
+			result[:img_size, (i + 1) * img_size: (i + 2) * img_size] = imdenorm(fake[0].numpy())
+			_, fake = self.G([img, -diff])
+			result[img_size:, (i + 1) * img_size: (i + 2) * img_size] = imdenorm(fake[0].numpy())
 
-	def save_model(self):
-		self.G.save_weights(os.path.join(self.args.save_dir, 'G.h5'))
-		self.D.save_weights(os.path.join(self.args.save_dir, 'D.h5'))
+		result[:img_size, :img_size] = imdenorm(img[0].numpy())
+		imsave(os.path.join(self.args.result_dir, 'result.jpg'), result)
+
+	def load(self, all_module=False):
+		self.G = tk.models.load_model(os.path.join(self.args.save_dir, 'G.h5'))
+		if all_module:
+			self.D = tk.models.load_model(os.path.join(self.args.save_dir, 'G.h5'))
+
+	def save(self):
+		self.G.save(os.path.join(self.args.save_dir, 'G.h5'))
+		self.D.save(os.path.join(self.args.save_dir, 'D.h5'))

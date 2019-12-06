@@ -45,10 +45,10 @@ class Model(object):
 			self.seed = tf.random.uniform([self.args.batch_size, self.args.z_dim], -1., 1.)
 		
 		elif self.args.phase == 'test':
-			self.load_model()
+			self.load()
 
 	@tf.function
-	def train_one_step(self, batch, noise):
+	def train_step(self, batch, noise):
 		with tf.GradientTape() as tape_g, tf.GradientTape() as tape_d:
 			fake = self.G(noise, training=True)
 			d_real = self.D(batch, training=True)
@@ -56,10 +56,10 @@ class Model(object):
 			loss_g = generator_loss(d_fake, self.args.gan_type)
 			loss_d = discriminator_loss(d_real, d_fake, self.args.gan_type)
 
-		self.vars_g = self.G.trainable_variables
-		self.vars_d = self.D.trainable_variables
-		self.optimizer_g.apply_gradients(zip(tape_g.gradient(loss_g, self.vars_g), self.vars_g))
-		self.optimizer_d.apply_gradients(zip(tape_d.gradient(loss_d, self.vars_d), self.vars_d))
+		vars_g = self.G.trainable_variables
+		vars_d = self.D.trainable_variables
+		self.optimizer_g.apply_gradients(zip(tape_g.gradient(loss_g, vars_g), vars_g))
+		self.optimizer_d.apply_gradients(zip(tape_d.gradient(loss_d, vars_d), vars_d))
 
 		return {'loss_g': loss_g, 'loss_d': loss_d}
 
@@ -70,7 +70,7 @@ class Model(object):
 			batch = next(self.iter)
 			noise = tf.random.uniform([self.args.batch_size, self.args.z_dim], -1., 1.)
 
-			item = self.train_one_step(batch, noise)
+			item = self.train_step(batch, noise)
 			print('iter: [%6d/%6d] time: %.2f' % (i, self.args.iteration, time.time() - start_time))
 			
 			if (i + 1) % self.args.log_freq == 0:
@@ -85,23 +85,20 @@ class Model(object):
 				imsave(os.path.join(self.args.sample_dir, '{:06d}.jpg'.format(i + 1)), sample)
 
 			if (i + 1) % self.args.save_freq == 0:
-				self.save_model()
+				self.save()
 
-		self.save_model()
+		self.save()
 		mimsave(os.path.join(self.args.sample_dir, 'sample.gif'), samples)
 
 	def test(self):
 		result = self.G(tf.random.uniform([self.args.batch_size, self.args.z_dim], -1., 1.), training=False)
 		imsave(os.path.join(self.args.result_dir, 'result.jpg'), montage(imdenorm(result.numpy())))
 
-	def load_model(self, all_module=False):
-		self.G = self.generator()
-		self.G.load_weights(os.path.join(self.args.save_dir, 'G.h5'))
-		
+	def load(self, all_module=False):
+		self.G = tk.models.load_model(os.path.join(self.args.save_dir, 'G.h5'))
 		if all_module:
-			self.D = self.discriminator()
-			self.D.load_weights(os.path.join(self.args.save_dir, 'D.h5'))
+			self.D = tk.models.load_model(os.path.join(self.args.save_dir, 'D.h5'))
 
-	def save_model(self):
-		self.G.save_weights(os.path.join(self.args.save_dir, 'G.h5'))
-		self.D.save_weights(os.path.join(self.args.save_dir, 'D.h5'))
+	def save(self):
+		self.G.save(os.path.join(self.args.save_dir, 'G.h5'))
+		self.D.save(os.path.join(self.args.save_dir, 'D.h5'))

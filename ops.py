@@ -1,9 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import tensorflow as tf
-# import tensorflow_addons as tfa
 import tensorflow.keras as tk
-import numpy as np
 
 # Activations
 
@@ -34,7 +32,7 @@ def Reshape(target_shape):
 	return tk.layers.Reshape(target_shape)
 
 def flatten(x):
-	return tf.reshape(x, [-1, np.prod(x.shape.as_list()[1:])])
+	return tf.reshape(x, [-1, tf.math.reduce_prod(x.shape[1:])])
 
 def Flatten():
 	return tk.layers.Flatten()
@@ -42,18 +40,25 @@ def Flatten():
 def Add():
 	return tk.layers.Add()
 
-def Dense(units, activation=None, use_bias=True, sn=False, kernel_initializer='glorot_uniform', bias_initializer='zeros'):
-	dense = tk.layers.Dense(units=units, activation=activation, use_bias=use_bias, kernel_initializer=kernel_initializer, bias_initializer=bias_initializer)
+def Dense(units, activation=None, use_bias=True, sn=False, 
+		kernel_initializer='glorot_uniform', bias_initializer='zeros'):
+	dense = tk.layers.Dense(units=units, activation=activation, use_bias=use_bias, 
+		kernel_initializer=kernel_initializer, bias_initializer=bias_initializer)
 	return SN(dense) if sn else dense
 
-def Conv2d(filters, kernel_size, strides, padding='same', sn=False, dilation_rate=1, activation=None, use_bias=True, kernel_initializer='glorot_uniform', bias_initializer='zeros'):
-	conv = tk.layers.Conv2D(filters=filters, kernel_size=kernel_size, strides=strides, padding=padding, dilation_rate=dilation_rate, activation=activation, use_bias=use_bias, kernel_initializer=kernel_initializer, bias_initializer=bias_initializer)
+def Conv2d(filters, kernel_size, strides, padding='same', sn=False, dilation_rate=1, 
+		activation=None, use_bias=True, kernel_initializer='glorot_uniform', bias_initializer='zeros'):
+	conv = tk.layers.Conv2D(filters=filters, kernel_size=kernel_size, strides=strides, padding=padding, 
+		dilation_rate=dilation_rate, activation=activation, use_bias=use_bias, 
+		kernel_initializer=kernel_initializer, bias_initializer=bias_initializer)
 	return SN(conv) if sn else conv
 
-def Deconv2d(filters, kernel_size, strides=2, padding='same', sn=False, dilation_rate=1, activation=None, use_bias=True, kernel_initializer='glorot_uniform', bias_initializer='zeros'):
-	deconv = tk.layers.Conv2DTranspose(filters=filters, kernel_size=kernel_size, strides=strides, padding=padding, dilation_rate=dilation_rate, activation=activation, use_bias=use_bias, kernel_initializer=kernel_initializer, bias_initializer=bias_initializer)
+def Deconv2d(filters, kernel_size, strides=2, padding='same', sn=False, dilation_rate=1, 
+		activation=None, use_bias=True, kernel_initializer='glorot_uniform', bias_initializer='zeros'):
+	deconv = tk.layers.Conv2DTranspose(filters=filters, kernel_size=kernel_size, strides=strides, padding=padding, 
+		dilation_rate=dilation_rate, activation=activation, use_bias=use_bias, 
+		kernel_initializer=kernel_initializer, bias_initializer=bias_initializer)
 	return SN(deconv) if sn else deconv
-	# return tk.Sequential([UpSample(strides), Conv2d(filters, kernel_size, 1, padding, sn, dilation_rate, activation, use_bias, kernel_initializer, bias_initializer)])
 
 def Dropout(rate):
 	return tk.layers.Dropout(rate)
@@ -118,17 +123,16 @@ class IN(tk.layers.Layer):
 		self.epsilon = 1e-5
 
 	def build(self, input_shape):
-		self.scale = self.add_weight(name='scale', shape=input_shape[-1:], initializer=tf.random_normal_initializer(1., 0.02), trainable=True)
-		self.offset = self.add_weight(name='offset', shape=input_shape[-1:], initializer='zeros', trainable=True)
+		self.scale = self.add_weight(name='scale', shape=input_shape[-1:], 
+			initializer=tf.random_normal_initializer(1., 0.02), trainable=True)
+		self.offset = self.add_weight(name='offset', shape=input_shape[-1:], 
+			initializer='zeros', trainable=True)
 
 	def call(self, x):
 		mean, variance = tf.nn.moments(x, axes=[1, 2], keepdims=True)
 		inv = tf.math.rsqrt(variance + self.epsilon)
 		normalized = (x - mean) * inv
 		return self.scale * normalized + self.offset
-
-# def IN():
-	# return tfa.layers.InstanceNormalization()
 
 class SN(tk.layers.Wrapper):
 	def __init__(self, layer, iteration=1, **kwargs):
@@ -301,11 +305,12 @@ def lerp_tf(start, end, ratio):
 	return start + (end - start) * tf.clip_by_value(ratio, 0.0, 1.0)
 
 def get_pixel_value(img, x, y): # img: N, H, W, C; x: N, H, W; y: N, H, W
-	N, H, W = x.shape
+	shape = tf.shape(img)
+	N, H, W = shape[0], shape[1], shape[2]
 	return tf.gather_nd(img, tf.stack([tf.tile(tf.reshape(tf.range(0, N), (N, 1, 1)), (1, H, W)), y, x], 3))
 
 def grid_sample(img, x, y):
-	_, H, W, _ = img.shape
+	H, W = tf.shape(img)[1], tf.shape(img)[2]
 	max_y = tf.cast(H - 1, 'int32')
 	max_x = tf.cast(W - 1, 'int32')
 
@@ -340,9 +345,9 @@ def gram_matrix(x):
 	return tf.matmul(tf.transpose(x, (0, 2, 1)), x) / (H * W * C)
 
 def gram_mse(x, y):
-	return tf.reduce_mean(tf.square(gram_matrix(x) - gram_matrix(y)))
+	return l2_loss(gram_matrix(x), gram_matrix(y))
 
-def roi_align(features, boxes, indices, img_size, output_size):
+def roi_align(feature, boxes, indices, img_size, output_size):
 	output_size[0] = output_size[0] * 2
 	output_size[1] = output_size[1] * 2
 
@@ -356,6 +361,6 @@ def roi_align(features, boxes, indices, img_size, output_size):
 	nH = binH * (output_size[0] - 1) / (img_size[0] - 1)
 
 	new_boxes = tf.concat([ny0, nx0, ny0 + nH, nx0 + nW], axis=-1)
-	sampled = tf.image.crop_and_resize(features, new_boxes, indices, output_size)
+	sampled = tf.image.crop_and_resize(feature, new_boxes, indices, output_size)
 
 	return tf.nn.avg_pool2d(sampled, 2, 2, padding='VALID')

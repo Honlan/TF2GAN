@@ -4,8 +4,7 @@ import tensorflow as tf
 import tensorflow.keras as tk
 from tensorflow.keras.applications import vgg19, VGG19
 import numpy as np
-from glob import glob
-import time
+import time, pickle
 from dataloader import Dataloader
 import sys
 sys.path.append('..')
@@ -33,7 +32,6 @@ class decoder(tk.Model):
 
 class Model(object):
 	def __init__(self, args):
-		args.dis_scale = args.img_size // 128
 		self.args = args
 
 	def encoder(self):
@@ -77,11 +75,8 @@ class Model(object):
 		return tk.Model(x_init, logits)
 
 	def build_model(self):
-		dataloader = Dataloader(self.args)
-		self.args.label_nc = dataloader.label_nc
-
 		if self.args.phase == 'train':
-			self.iter = iter(dataloader.loader)
+			self.iter = iter(Dataloader(self.args).loader)
 
 			self.E = self.encoder()
 			self.G = decoder()
@@ -109,21 +104,17 @@ class Model(object):
 			self.summary_writer = tf.summary.create_file_writer(self.args.log_dir)
 		
 		elif self.args.phase == 'test':
-			self.load_model()
+			self.load()
 
 	@tf.function
 	def vgg_loss(self, real, fake):
 		real_features = self.vgg(vgg19.preprocess_input((real + 1.) * 127.5))
 		fake_features = self.vgg(vgg19.preprocess_input((fake + 1.) * 127.5))
-
-		loss = 0
-		for i in range(len(real_features)):
-			loss += self.vgg_weights[i] * l1_loss(real_features[i], fake_features[i])
-
-		return loss
+		return tf.reduce_sum([self.vgg_weights[i] * l1_loss(
+			real_features[i] / 127.5, fake_features[i] / 127.5) for i in range(len(real_features))])
 
 	@tf.function
-	def train_one_step(self, img, label):
+	def train_step(self, img, label):
 		with tf.GradientTape() as tape_g, tf.GradientTape() as tape_d:
 			mean, var = self.E(img)
 			fake = self.G(label, mean, var, random_style=False)
@@ -140,10 +131,10 @@ class Model(object):
 			loss_g = loss_g_adv + loss_g_vgg + loss_g_fm + loss_g_kl
 			loss_d = loss_d_adv
 
-		self.vars_g = self.E.trainable_variables + self.G.trainable_variables
-		self.vars_d = self.D.trainable_variables
-		self.optimizer_g.apply_gradients(zip(tape_g.gradient(loss_g, self.vars_g), self.vars_g))
-		self.optimizer_d.apply_gradients(zip(tape_d.gradient(loss_d, self.vars_d), self.vars_d))
+		vars_g = self.E.trainable_variables + self.G.trainable_variables
+		vars_d = self.D.trainable_variables
+		self.optimizer_g.apply_gradients(zip(tape_g.gradient(loss_g, vars_g), vars_g))
+		self.optimizer_d.apply_gradients(zip(tape_d.gradient(loss_d, vars_d), vars_d))
 
 		return {'loss_g_adv': loss_g_adv, 'loss_g_vgg': loss_g_vgg, 'loss_g_fm': loss_g_fm, 'loss_g_kl': loss_g_kl,
 				'loss_d_adv': loss_d_adv, 'mean': mean, 'var': var, 'fake': fake}
@@ -156,7 +147,7 @@ class Model(object):
 			for i in range(self.args.iteration):
 				img, label = next(self.iter)
 
-				item = self.train_one_step(img, label)
+				item = self.train_step(img, label)
 				print('epoch: [%3d/%3d] iter: [%6d/%6d] time: %.2f' % (e, self.args.epochs + self.args.decay_epochs, 
 					i, self.args.iteration, time.time() - start_time))
 				step += 1
@@ -170,8 +161,7 @@ class Model(object):
 						tf.summary.scalar('loss_d_adv', item['loss_d_adv'], step=step)
 
 			mean, var, fake = item['mean'], item['var'], item['fake']
-			img = imdenorm(img.numpy())
-			fake = imdenorm(fake.numpy())
+			img, fake = imdenorm(img.numpy()), imdenorm(fake.numpy())
 			sample = np.zeros((self.args.batch_size * img_size, (3 + self.args.n_random) * img_size, self.args.img_nc))
 
 			for i in range(self.args.batch_size):
@@ -186,7 +176,7 @@ class Model(object):
 					sample[i * img_size: (i + 1) * img_size, (3 + j) * img_size: (4 + j) * img_size] = random[i]
 
 			imsave(os.path.join(self.args.sample_dir, f'{e}.jpg'), sample)
-			self.save_model()
+			self.save(label[:1].numpy())
 
 	def test(self):
 		img_size = self.args.img_size
@@ -230,30 +220,25 @@ class Model(object):
 
 			imsave(os.path.join(self.args.result_dir, 'combine.jpg'), result)
 
-	def load_label(self, label_path):
-		img_size = self.args.img_size
-		label = imresize(imread(label_path, False), img_size, img_size, 'NEAREST')
-		one_hot = np.zeros((img_size, img_size, self.args.label_nc), 'float32')
-
-		for i in range(self.args.label_nc):
-			one_hot[label == i] = 1.
-
-		return one_hot
-
 	def multi_to_one(self, data):
 		return np.expand_dims(np.argmax(data, -1) / (self.args.label_nc - 1), -1)
 
-	def load_model(self, all_module=False):
-		self.E = self.encoder()
-		self.E.load_weights(os.path.join(self.args.save_dir, 'E.h5'))
+	def load(self, all_module=False):
+		self.E = tk.models.load_model(os.path.join(self.args.save_dir, 'E.h5'))
 		self.G = decoder()
 		self.G.load_weights(os.path.join(self.args.save_dir, 'G.h5'))
+
+		with open(os.path.join(self.args.save_dir, 'sample.pkl'), 'rb') as fr:
+			label = pickle.load(fr)
+			self.G(label, None, None, random_style=True)
 		
 		if all_module:
-			self.D = self.discriminator(self.args.img_nc + self.args.label_nc)
-			self.D.load_weights(os.path.join(self.args.save_dir, 'D.h5'))
+			self.D = tk.models.load_model(os.path.join(self.args.save_dir, 'D.h5'))
 
-	def save_model(self):
-		self.E.save_weights(os.path.join(self.args.save_dir, 'E.h5'))
+	def save(self, label):
+		self.E.save(os.path.join(self.args.save_dir, 'E.h5'))
 		self.G.save_weights(os.path.join(self.args.save_dir, 'G.h5'))
-		self.D.save_weights(os.path.join(self.args.save_dir, 'D.h5'))
+		self.D.save(os.path.join(self.args.save_dir, 'D.h5'))
+		
+		with open(os.path.join(self.args.save_dir, 'sample.pkl'), 'wb') as fw:
+			pickle.dump(label)

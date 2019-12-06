@@ -20,7 +20,7 @@ def parse_args():
 	parser.add_argument('--dis_layer', type=int, default=4)
 	parser.add_argument('--gan_type', type=str, default='hinge', choices=('vanilla', 'lsgan', 'hinge'))
 	parser.add_argument('--w_adv', type=float, default=1)
-	parser.add_argument('--w_vgg', type=float, default=0.05)
+	parser.add_argument('--w_vgg', type=float, default=10)
 	parser.add_argument('--w_fm', type=float, default=10)
 	parser.add_argument('--w_kl', type=float, default=0.05)
 
@@ -53,6 +53,12 @@ def parse_args():
 	check_dir(args.save_dir)
 	args.result_dir = os.path.join(args.output_dir, args.result_dir)
 	check_dir(args.result_dir)
+
+	args.dis_scale = args.img_size // 128
+	if args.dataset_name == 'CelebAMask19':
+		args.label_names = ['background', 'skin', 'nose', 'eye_g', 'l_eye', 'r_eye', 'l_brow', 'r_brow', 
+			'l_ear', 'r_ear', 'mouth', 'u_lip', 'l_lip', 'hair', 'hat', 'ear_r', 'neck_l', 'neck', 'cloth']
+		args.label_nc = len(args.label_names)
 
 	return args
 

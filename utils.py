@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-import tensorflow as tf
 import numpy as np
 import cv2, imageio, os
 
@@ -23,6 +22,13 @@ def imresize(img, h, w, method='LINEAR'):
 		return cv2.resize(img, (w, h), interpolation=cv2.INTER_LINEAR)
 	elif method == 'NEAREST':
 		return cv2.resize(img, (w, h), interpolation=cv2.INTER_NEAREST)
+
+def center_crop(img):
+	h, w = img.shape[:2]
+	if h >= w:
+		return img[h // 2 - w // 2: h // 2 - w // 2 + w, :]
+	else:
+		return img[:, w // 2 - h // 2: w // 2 - h // 2 + h]
 
 def imnorm(img):
 	return (img - 0.5) * 2.
