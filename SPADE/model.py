@@ -241,4 +241,4 @@ class Model(object):
 		self.D.save(os.path.join(self.args.save_dir, 'D.h5'))
 		
 		with open(os.path.join(self.args.save_dir, 'sample.pkl'), 'wb') as fw:
-			pickle.dump(label)
+			pickle.dump(label, fw)

@@ -155,7 +155,7 @@ class Model(object):
 				sample[2 * i * img_size: (2 * i + 1) * img_size, :img_size] = img[i]
 
 			imsave(os.path.join(self.args.sample_dir, f'{e}.jpg'), sample)
-			self.save_model()
+			self.save()
 
 	def test(self):
 		img_size = self.args.img_size
@@ -173,10 +173,11 @@ class Model(object):
 		imsave(os.path.join(self.args.result_dir, 'result.jpg'), result)
 
 	def load(self, all_module=False):
-		self.G = tk.models.load_model(os.path.join(self.args.save_dir, 'G.h5'))
+		self.G = self.generator()
+		self.G.load_weights(os.path.join(self.args.save_dir, 'G.h5'))
 		if all_module:
 			self.D = tk.models.load_model(os.path.join(self.args.save_dir, 'G.h5'))
 
 	def save(self):
-		self.G.save(os.path.join(self.args.save_dir, 'G.h5'))
+		self.G.save_weights(os.path.join(self.args.save_dir, 'G.h5'))
 		self.D.save(os.path.join(self.args.save_dir, 'D.h5'))

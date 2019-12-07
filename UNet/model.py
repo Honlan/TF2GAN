@@ -107,7 +107,7 @@ class Model(object):
 		result_dir = os.path.join(self.args.result_dir, self.args.test_img_dir)
 		check_dir(result_dir)
 		for path, img in self.loader:
-			filename = path.numpy().split(os.sep)[-1]
+			filename = path.numpy().decode('utf-8').split(os.sep)[-1]
 			label_ = self.P(tf.expand_dims(img, 0), training=False)
 			imsave(os.path.join(result_dir, filename), self.multi_to_one(label_[0]))
 
