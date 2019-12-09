@@ -1,8 +1,8 @@
-# DCGAN
+# UNet
 
-Deep Convolutional Generative Adversarial Network
+Convolutional Networks for Biomedical Image Segmentation
 
-[arvix](https://arxiv.org/abs/1511.06434) [project](https://github.com/carpedm20/DCGAN-tensorflow)
+[paper](https://arxiv.org/abs/1505.04597)
 
 ![](asset/teaser.png)
 
@@ -10,9 +10,9 @@ Deep Convolutional Generative Adversarial Network
 
 ## Train
 
-Make a folder under `dataset` and put your images in it, just like the `celeba` folder
+Make a folder under `dataset` and put your images as well as labels in it, just like the `CelebAMask19` folder
 
-Convert the data to tfrecord for convenience, where the default value of `--dataset_name` is `celeba`
+Convert the data to tfrecord for convenience, where the default value of `--dataset_name` is `CelebAMask19`
 
 ```
 python main.py --dataset_name your_dataset_name --phase tfrecord
@@ -26,16 +26,16 @@ python main.py --dataset_name your_dataset_name --phase train
 
 ## Test
 
-Test the model
+Test the model. You need to specify the test folder of images for segmentation by `--test_img_dir`, where the default value is `img`
 
 ```
-python main.py --dataset_name your_dataset_name --phase test
+python main.py --dataset_name your_dataset_name --phase test --test_img_dir your_test_img_dir
 ```
 
-Or download the pretrained model of `celeba`, unzip it and you will get a folder named `output`
+Or download the pretrained model of `CelebAMask19`, unzip it and you will get a folder named `output`
 
 ```
 python main.py --phase test
 ```
 
-The generated image is saved as `output/DCGAN_{dataset_name}/result/result.jpg`
+The segmentation results are saved in `output/UNet_{dataset_name}/result/{test_img_dir}`

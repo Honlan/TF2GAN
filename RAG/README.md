@@ -1,8 +1,8 @@
-# DCGAN
+# RAG
 
-Deep Convolutional Generative Adversarial Network
+Residual Attribute Generative Adversarial Network
 
-[paper](https://ieeexplore.ieee.org/document/8746217) [project](https://github.com/carpedm20/DCGAN-tensorflow)
+[paper](https://ieeexplore.ieee.org/document/8746217)
 
 ![](asset/teaser.png)
 
@@ -10,32 +10,30 @@ Deep Convolutional Generative Adversarial Network
 
 ## Train
 
-Make a folder under `dataset` and put your images in it, just like the `celeba` folder
+Download the [CelebA](http://mmlab.ie.cuhk.edu.hk/projects/CelebA.html) dataset as well as the annotation file of facial attributes, `list_attr_celeba.txt`
 
-Convert the data to tfrecord for convenience, where the default value of `--dataset_name` is `celeba`
-
-```
-python main.py --dataset_name your_dataset_name --phase tfrecord
-```
-
-Train the model
+Convert the data to tfrecord for convenience
 
 ```
-python main.py --dataset_name your_dataset_name --phase train
+python main.py --phase tfrecord
 ```
+
+Train the model download the pretrained model of `celeba`, unzip it and you will get a folder named `output`
+
+```
+python main.py --phase train
+```
+
+You can also 
 
 ## Test
 
-Test the model
+Test the model. You need to specify the test image by `--test_img`, where the default value is `'000009.jpg`
 
 ```
-python main.py --dataset_name your_dataset_name --phase test
+python main.py --phase test --test_img your_test_img
 ```
 
-Or download the pretrained model of `celeba`, unzip it and you will get a folder named `output`
+The generated image is saved as `output/RAG_{dataset_name}/result/result.jpg`
 
-```
-python main.py --phase test
-```
-
-The generated image is saved as `output/DCGAN_{dataset_name}/result/result.jpg`
+The first and the second rows demonstrate the results where a certain facial attribute is enhanced or supressed

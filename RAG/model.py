@@ -164,12 +164,12 @@ class Model(object):
 		for i in range(self.args.label_nc):
 			diff = np.zeros((1, self.args.label_nc), 'float32')
 			diff[:, i] = 1.
-			_, fake = self.G([img, diff])
+			_, fake = self.G([self.img, diff])
 			result[:img_size, (i + 1) * img_size: (i + 2) * img_size] = imdenorm(fake[0].numpy())
-			_, fake = self.G([img, -diff])
+			_, fake = self.G([self.img, -diff])
 			result[img_size:, (i + 1) * img_size: (i + 2) * img_size] = imdenorm(fake[0].numpy())
 
-		result[:img_size, :img_size] = imdenorm(img[0].numpy())
+		result[:img_size, :img_size] = imdenorm(self.img[0].numpy())
 		imsave(os.path.join(self.args.result_dir, 'result.jpg'), result)
 
 	def load(self, all_module=False):
