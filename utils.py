@@ -40,7 +40,7 @@ def montage(imgs):
 	N, H, W, C = imgs.shape
 	n = int(np.ceil(np.sqrt(N)))
 
-	result = np.zeros((n * H, n * W, C))
+	result = np.ones((n * H, n * W, C))
 	for i in range(N):
 		r, c = i // n, i % n
 		result[r * H: (r + 1) * H, c * W: (c + 1) * W] = imgs[i]

@@ -75,8 +75,9 @@ class Model(object):
 		return tk.Model(x_init, logits)
 
 	def build_model(self):
+		dataloader = Dataloader(self.args)
 		if self.args.phase == 'train':
-			self.iter = iter(Dataloader(self.args).loader)
+			self.iter = iter(dataloader.loader)
 
 			self.E = self.encoder()
 			self.G = decoder()
@@ -104,6 +105,9 @@ class Model(object):
 			self.summary_writer = tf.summary.create_file_writer(self.args.log_dir)
 		
 		elif self.args.phase == 'test':
+			self.img_loader, self.label_loader = dataloader.img_loader, dataloader.label_loader
+			self.N_img = self.img_loader.reduce(0, lambda x, _: x + 1)
+			self.N_label = self.label_loader.reduce(0, lambda x, _: x + 1)
 			self.load()
 
 	@tf.function
@@ -122,7 +126,8 @@ class Model(object):
 			d_real = self.D(tf.concat([img, label], -1))
 			d_fake = self.D(tf.concat([fake, label], -1))
 			loss_g_adv = self.args.w_adv * generator_loss([d[-1] for d in d_fake], self.args.gan_type, True)
-			loss_d_adv = self.args.w_adv * discriminator_loss([d[-1] for d in  d_real], [d[-1] for d in d_fake], self.args.gan_type, True)
+			loss_d_adv = self.args.w_adv * discriminator_loss([d[-1] for d in d_real], 
+															  [d[-1] for d in d_fake], self.args.gan_type, True)
 			
 			loss_g_vgg = self.args.w_vgg * self.vgg_loss(img, fake)
 			loss_g_fm = self.args.w_fm * feature_loss(d_real, d_fake)
@@ -162,7 +167,7 @@ class Model(object):
 
 			mean, var, fake = item['mean'], item['var'], item['fake']
 			img, fake = imdenorm(img.numpy()), imdenorm(fake.numpy())
-			sample = np.zeros((self.args.batch_size * img_size, (3 + self.args.n_random) * img_size, self.args.img_nc))
+			sample = np.ones((self.args.batch_size * img_size, (3 + self.args.n_random) * img_size, self.args.img_nc))
 
 			for i in range(self.args.batch_size):
 				sample[i * img_size: (i + 1) * img_size, 0 * img_size: 1 * img_size] = img[i]
@@ -181,42 +186,30 @@ class Model(object):
 	def test(self):
 		img_size = self.args.img_size
 		if self.args.test_mode == 'random':
-			label_paths = glob(os.path.join('dataset', self.args.dataset_name, self.args.test_label_dir, '*'))
-			label = np.array([load_label(label_path) for label_path in label_paths])
-
-			result = np.zeros((len(label_paths) * img_size, (self.args.n_random + 1) * img_size, self.args.img_nc))
-			for j in range(self.args.n_random):
-				random = self.G(label, None, None, random_style=True)
-				random = imdenorm(random.numpy())
+			result = np.ones(((self.args.n_random + 1) * img_size, self.N_label * img_size, self.args.img_nc))
+			for j, label in enumerate(self.label_loader):
+				for i in range(self.args.n_random):
+					random = self.G(tf.expand_dims(label, 0), None, None, random_style=True)
+					result[(i + 1) * img_size: (i + 2) * img_size, j * img_size: (j + 1) * img_size] = imdenorm(random[0].numpy())
 				
-				for i in range(len(label_paths)):
-					result[i * img_size: (i + 1) * img_size, (j + 1) * img_size: (j + 2) * img_size] = random[i]
-
-					if j == 0:
-						result[i * img_size: (i + 1) * img_size, :img_size] = self.multi_to_one(label[i])
+					if i == 0:
+						result[:img_size, j * img_size: (j + 1) * img_size] = self.multi_to_one(label.numpy())
 
 			imsave(os.path.join(self.args.result_dir, 'random.jpg'), result)
 
 		elif self.args.test_mode == 'combine':
-			img_paths = glob(os.path.join('dataset', self.args.dataset_name, self.args.test_img_dir, '*'))
-			label_paths = glob(os.path.join('dataset', self.args.dataset_name, self.args.test_label_dir, '*'))
-			label = np.array([load_label(label_path) for label_path in label_paths])
+			result = np.ones(((self.N_img + 1) * img_size, (self.N_label + 1) * img_size, self.args.img_nc))
+			for i, img in enumerate(self.img_loader):
+				result[(i + 1) * img_size: (i + 2) * img_size, :img_size] = imdenorm(img.numpy())
+				mean, var = self.E(tf.expand_dims(img, 0))
 
-			result = np.zeros(((len(img_paths) + 1) * img_size, (len(label_paths) + 1) * img_size, self.args.img_nc))
-			for j in range(len(img_paths)):
-				img = imread(img_paths[j])
-				result[:img_size, (j + 1) * img_size: (j + 2) * img_size] = img
-
-				img = np.repeat(np.expand_dims(imnorm(img), 0), len(label_paths), 0)
-				mean, var = self.E(img)
-				random = self.G(label, mean, var, random_style=False)
-				random = imdenorm(random.numpy())
-				
-				for i in range(len(label_paths)):
-					result[(i + 1) * img_size: (i + 2) * img_size, (j + 1) * img_size: (j + 2) * img_size] = random[i]
-
-					if j == 0:
-						result[i * img_size: (i + 1) * img_size, :img_size] = self.multi_to_one(label[i])
+				for j, label in enumerate(self.label_loader):
+					fake = self.G(tf.expand_dims(label, 0), mean, var, random_style=False)
+					fake = imdenorm(fake[0].numpy())
+					result[(i + 1) * img_size: (i + 2) * img_size, (j + 1) * img_size: (j + 2) * img_size] = fake
+					
+					if i == 0:
+						result[:img_size, (j + 1) * img_size: (j + 2) * img_size] = self.multi_to_one(label.numpy())
 
 			imsave(os.path.join(self.args.result_dir, 'combine.jpg'), result)
 
@@ -224,19 +217,20 @@ class Model(object):
 		return np.expand_dims(np.argmax(data, -1) / (self.args.label_nc - 1), -1)
 
 	def load(self, all_module=False):
-		self.E = tk.models.load_model(os.path.join(self.args.save_dir, 'E.h5'))
+		self.E = self.encoder()
+		self.E.load_weights(os.path.join(self.args.save_dir, 'E.h5'))
+		
 		self.G = decoder()
-		self.G.load_weights(os.path.join(self.args.save_dir, 'G.h5'))
-
 		with open(os.path.join(self.args.save_dir, 'sample.pkl'), 'rb') as fr:
 			label = pickle.load(fr)
 			self.G(label, None, None, random_style=True)
+			self.G.load_weights(os.path.join(self.args.save_dir, 'G.h5'))
 		
 		if all_module:
 			self.D = tk.models.load_model(os.path.join(self.args.save_dir, 'D.h5'))
 
 	def save(self, label):
-		self.E.save(os.path.join(self.args.save_dir, 'E.h5'))
+		self.E.save_weights(os.path.join(self.args.save_dir, 'E.h5'))
 		self.G.save_weights(os.path.join(self.args.save_dir, 'G.h5'))
 		self.D.save(os.path.join(self.args.save_dir, 'D.h5'))
 		

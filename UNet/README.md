@@ -26,7 +26,7 @@ python main.py --dataset_name your_dataset_name --phase train
 
 ## Test
 
-Test the model. You need to specify the test folder of images for segmentation by `--test_img_dir`, where the default value is `img`
+Test the model. You need to specify the test folder by `--test_img_dir`, where the default value is `img`
 
 ```
 python main.py --dataset_name your_dataset_name --phase test --test_img_dir your_test_img_dir

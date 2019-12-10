@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import tensorflow as tf
+import numpy as np
 from glob import glob
 import os
 
@@ -25,7 +26,7 @@ class Dataloader(object):
 		elif args.phase == 'train':
 			AUTOTUNE = tf.data.experimental.AUTOTUNE
 			dataset = tf.data.TFRecordDataset(self.tfrecord_path)
-			dataset_size = dataset.reduce(0, lambda x, _: x + 1)
+			dataset_size = dataset.reduce(np.int64(0), lambda x, _: x + 1)
 			self.desc = {'img': tf.io.FixedLenFeature([], 'string')}
 			self.loader = dataset.shuffle(min(dataset_size, 10000)).repeat().map(
 				self.parse_example, AUTOTUNE).batch(self.batch_size).prefetch(AUTOTUNE)

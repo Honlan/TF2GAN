@@ -46,6 +46,25 @@ def Dense(units, activation=None, use_bias=True, sn=False,
 		kernel_initializer=kernel_initializer, bias_initializer=bias_initializer)
 	return SN(dense) if sn else dense
 
+class Dense_with_w(tk.layers.Layer):
+	def __init__(self, activation=None, use_bias=True, sn=False, 
+			kernel_initializer='glorot_uniform', bias_initializer='zeros'):
+		super(Dense_with_w, self).__init__()
+		self.dense = Dense(1, activation=activation, use_bias=use_bias, 
+			kernel_initializer=kernel_initializer, bias_initializer=bias_initializer)
+		self.wrapper = SN(self.dense) if sn else self.dense
+		self.use_bias = use_bias
+
+	def call(self, x):
+		h = self.wrapper(flatten(x))
+
+		if self.use_bias:
+			w = tf.gather(tf.transpose(tf.nn.bias_add(self.dense.kernel, self.dense.bias)), 0)
+		else:
+			w = tf.gather(tf.transpose(self.dense.kernel), 0)
+
+		return h, w
+
 def Conv2d(filters, kernel_size, strides, padding='same', sn=False, dilation_rate=1, 
 		activation=None, use_bias=True, kernel_initializer='glorot_uniform', bias_initializer='zeros'):
 	conv = tk.layers.Conv2D(filters=filters, kernel_size=kernel_size, strides=strides, padding=padding, 
@@ -112,6 +131,19 @@ class SpadeResblock(tk.layers.Layer):
 
 		return x + h
 
+class AdaLINResblock(tk.layers.Layer):
+	def __init__(self, filters):
+		super(AdaLINResblock, self).__init__()
+		self.conv1 = Conv2d(filters, 3, 1)
+		self.norm1 = AdaLIN()
+		self.conv2 = Conv2d(filters, 3, 1)
+		self.norm2 = AdaLIN()
+
+	def call(self, x, scale, offset):
+		h = relu(self.norm1(self.conv1(x), scale, offset))
+		h = self.norm2(self.conv2(h), scale, offset)
+		return x + h
+
 # Normalizations
 
 def BN():
@@ -130,8 +162,31 @@ class IN(tk.layers.Layer):
 
 	def call(self, x):
 		mean, variance = tf.nn.moments(x, axes=[1, 2], keepdims=True)
-		inv = tf.math.rsqrt(variance + self.epsilon)
-		normalized = (x - mean) * inv
+		normalized = (x - mean) * tf.math.rsqrt(variance + self.epsilon)
+		return self.scale * normalized + self.offset
+
+class LIN(tk.layers.Layer):
+	def __init__(self):
+		super(LIN, self).__init__()
+		self.epsilon = 1e-5
+
+	def build(self, input_shape):
+		self.scale = self.add_weight(name='scale', shape=input_shape[-1:], 
+			initializer=tf.random_normal_initializer(1., 0.02), trainable=True)
+		self.offset = self.add_weight(name='offset', shape=input_shape[-1:], 
+			initializer='zeros', trainable=True)
+		self.rho = self.add_weight(name='rho', shape=input_shape[-1:], 
+			initializer=tf.constant_initializer(0.0), trainable=True, 
+			constraint=lambda x: tf.clip_by_value(x, clip_value_min=0.0, clip_value_max=1.0))
+
+	def call(self, x):
+		in_mean, in_variance = tf.nn.moments(x, axes=[1, 2], keepdims=True)
+		in_normalized = (x - in_mean) * tf.math.rsqrt(in_variance + self.epsilon)
+
+		ln_mean, ln_variance = tf.nn.moments(x, axes=[1, 2, 3], keepdims=True)
+		ln_normalized = (x - ln_mean) * tf.math.rsqrt(ln_variance + self.epsilon)
+
+		normalized = self.rho * in_normalized + (1 - self.rho) * ln_normalized
 		return self.scale * normalized + self.offset
 
 class SN(tk.layers.Wrapper):
@@ -180,8 +235,27 @@ class AdaIN(tk.layers.Layer):
 
 	def call(self, x, scale, offset):
 		mean, variance = tf.nn.moments(x, axes=[1, 2], keepdims=True)
-		inv = tf.math.rsqrt(variance + self.epsilon)
-		normalized = (x - mean) * inv
+		normalized = (x - mean) * tf.math.rsqrt(variance + self.epsilon)
+		return scale * normalized + offset
+
+class AdaLIN(tk.layers.Layer):
+	def __init__(self):
+		super(AdaLIN, self).__init__()
+		self.epsilon = 1e-5
+
+	def build(self, input_shape):
+		self.rho = self.add_weight(name='rho', shape=input_shape[-1:], 
+			initializer=tf.constant_initializer(0.9), trainable=True, 
+			constraint=lambda x: tf.clip_by_value(x, clip_value_min=0.0, clip_value_max=1.0))
+
+	def call(self, x, scale, offset):
+		in_mean, in_variance = tf.nn.moments(x, axes=[1, 2], keepdims=True)
+		in_normalized = (x - in_mean) * tf.math.rsqrt(in_variance + self.epsilon)
+
+		ln_mean, ln_variance = tf.nn.moments(x, axes=[1, 2, 3], keepdims=True)
+		ln_normalized = (x - ln_mean) * tf.math.rsqrt(ln_variance + self.epsilon)
+
+		normalized = self.rho * in_normalized + (1 - self.rho) * ln_normalized
 		return scale * normalized + offset
 
 def param_free_norm(x, epsilon=1e-5):
@@ -300,6 +374,12 @@ def up_sample(x, scale_factor=2):
 
 def UpSample(size=2):
 	return tk.layers.UpSampling2D(size=size)
+
+def global_avg_pooling(x):
+    return tf.reduce_mean(x, axis=[1, 2])
+
+def global_max_pooling(x):
+    return tf.reduce_max(x, axis=[1, 2])
 
 def lerp_tf(start, end, ratio):
 	return start + (end - start) * tf.clip_by_value(ratio, 0.0, 1.0)

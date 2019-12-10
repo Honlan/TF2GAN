@@ -39,8 +39,8 @@ class Model(object):
 		return tk.Model(x, logit)
 		
 	def build_model(self):
+		dataloader = Dataloader(self.args)
 		if self.args.phase == 'train':
-			dataloader = Dataloader(self.args)
 			self.args.iteration = dataloader.dataset_size // self.args.batch_size 
 			self.iter = iter(dataloader.loader)
 
@@ -58,7 +58,7 @@ class Model(object):
 			self.summary_writer = tf.summary.create_file_writer(self.args.log_dir)
 		
 		elif self.args.phase == 'test':
-			self.loader = Dataloader(self.args).loader
+			self.loader = dataloader.loader
 			self.load()
 
 	@tf.function
@@ -93,7 +93,7 @@ class Model(object):
 
 			label_ = self.P(img, training=False)
 			img, label, label_ = imdenorm(img.numpy()), label.numpy(), label_.numpy()
-			sample = np.zeros((self.args.batch_size * img_size, 3 * img_size, self.args.img_nc))
+			sample = np.ones((self.args.batch_size * img_size, 3 * img_size, self.args.img_nc))
 
 			for i in range(self.args.batch_size):
 				sample[i * img_size: (i + 1) * img_size, 0 * img_size: 1 * img_size] = img[i]

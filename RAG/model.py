@@ -56,8 +56,8 @@ class Model(object):
 		return tk.Model(x, [logit, c])
 
 	def build_model(self):
+		dataloader = Dataloader(self.args)
 		if self.args.phase == 'train':
-			dataloader = Dataloader(self.args)
 			self.args.iteration = dataloader.dataset_size // self.args.batch_size 
 			self.iter = iter(dataloader.loader)
 
@@ -77,7 +77,7 @@ class Model(object):
 			self.summary_writer = tf.summary.create_file_writer(self.args.log_dir)
 		
 		elif self.args.phase == 'test':
-			self.img = Dataloader(self.args).img
+			self.img = dataloader.img
 			self.load()
 
 	@tf.function
@@ -138,7 +138,7 @@ class Model(object):
 						tf.summary.scalar('loss_d_adv', item['loss_d_adv'], step=step)
 						tf.summary.scalar('loss_d_cls', item['loss_d_cls'], step=step)
 
-			sample = np.zeros((2 * self.args.batch_size * img_size, (self.args.label_nc + 1) * img_size, self.args.img_nc))
+			sample = np.ones((2 * self.args.batch_size * img_size, (self.args.label_nc + 1) * img_size, self.args.img_nc))
 			for j in range(self.args.label_nc):
 				label_ = label.numpy()
 				label_[:, j] = 1. - label_[:, j]

@@ -11,22 +11,8 @@ sys.path.append('..')
 from ops import *
 from utils import *
 
-class decoder(tk.Model):
-	def __init__(self, img_nc):
-		super(decoder, self).__init__()
-		self.img_up = [tk.Sequential([Resblock(512), Resblock(512), Resblock(512), Relu(), Deconv2d(128, 3), IN(), Relu()]),
-					   tk.Sequential([Resblock(256), Resblock(256), Resblock(256), Relu(), Deconv2d(64,  3), IN(), Relu()]),
-					   tk.Sequential([Resblock(128), Resblock(128), Resblock(128), Relu(), Conv2d(64, 3, 1), IN(), Relu(), 
-					   Conv2d(img_nc, 7, 1, activation='tanh')])]
-
-	def call(self, h_img, features):
-		for i, S in enumerate(self.img_up):
-			h_img = S(tf.concat([h_img, features[-1 - i]], -1))
-		return h_img
-
-class Model(tk.Model):
+class Model(object):
 	def __init__(self, args):
-		super(Model, self).__init__()
 		self.args = args
 
 	def attn_conv(self, concat, last_norm):
@@ -47,11 +33,11 @@ class Model(tk.Model):
 		
 		return h_img, h_pose
 
-	def encoder(self):
+	def generator(self):
 		img = Input((self.args.img_h, self.args.img_w, self.args.img_nc))
 		pose = Input((self.args.img_h, self.args.img_w, 2 * self.args.n_kps))
 		
-		img_down = [tk.Sequential([Conv2d(64, 7, 1), IN(), Relu()]),
+		img_down = [tk.Sequential([Conv2d(64,  7, 1), IN(), Relu()]),
 					tk.Sequential([Conv2d(128, 3, 2), IN(), Relu()]),
 					tk.Sequential([Conv2d(256, 3, 2), IN(), Relu()])]
 
@@ -69,7 +55,15 @@ class Model(tk.Model):
 		for i in range(self.args.n_attn_block):
 			h_img, h_pose = self.attn_block(h_img, h_pose, False if i == 0 else True)
 
-		return tk.Model([img, pose], [h_img, features])
+		img_up = [tk.Sequential([Resblock(512), Resblock(512), Resblock(512), Relu(), Deconv2d(128, 3), IN(), Relu()]),
+				  tk.Sequential([Resblock(256), Resblock(256), Resblock(256), Relu(), Deconv2d(64,  3), IN(), Relu()]),
+				  tk.Sequential([Resblock(128), Resblock(128), Resblock(128), Relu(), Conv2d(64, 3, 1), IN(), Relu(), 
+				  Conv2d(self.args.img_nc, 7, 1, activation='tanh')])]
+
+		for i, S in enumerate(img_up):
+			h_img = S(tf.concat([h_img, features[-1 - i]], -1))
+
+		return tk.Model([img, pose], h_img)
 
 	def discriminator(self, input_nc):
 		return tk.Sequential([
@@ -82,10 +76,8 @@ class Model(tk.Model):
 	def build_model(self):
 		if self.args.phase == 'train':
 			self.iter = iter(Dataloader(self.args).loader)
-			# self.features = None
 
-			self.E = self.encoder()
-			self.G = decoder(self.args.img_nc)
+			self.G = self.generator()
 			self.DI = self.discriminator(2 * self.args.img_nc)
 			self.DK = self.discriminator(self.args.img_nc + self.args.n_kps)
 
@@ -108,7 +100,7 @@ class Model(tk.Model):
 			self.summary_writer = tf.summary.create_file_writer(self.args.log_dir)
 		
 		elif self.args.phase == 'test':
-			self.load_model()
+			self.load()
 
 	@tf.function
 	def segments_seperate_style_loss(self, fake, real, bbox):
@@ -126,8 +118,8 @@ class Model(tk.Model):
 				indices[j].append(i)
 				boxes[j].append(box)
 
-		real_feature = self.vgg(vgg19.preprocess_input((real + 1.) * 127.5))
-		fake_feature = self.vgg(vgg19.preprocess_input((fake + 1.) * 127.5))
+		real_feature = self.vgg(vgg19.preprocess_input((real + 1.) * 127.5)) / 127.5
+		fake_feature = self.vgg(vgg19.preprocess_input((fake + 1.) * 127.5)) / 127.5
 		loss_per = self.args.w_per * l1_loss(fake_feature, real_feature)
 
 		img_size = (self.args.img_h, self.args.img_w)
@@ -142,48 +134,10 @@ class Model(tk.Model):
 
 		return loss_rec, loss_per, loss_style
 
-	def blend(self, k, feature, a_bbox, b_bbox):
-		self.features[k].assign(tf.zeros(feature.shape))
-		a_bbox, b_bbox = tf.cast(a_bbox + 0.5, 'int32'), tf.cast(b_bbox + 0.5, 'int32')
-
-		for i in range(self.args.batch_size):
-			for j in range(self.args.n_body_part):
-				ax0, ay0, ax1, ay1 = a_bbox[i, j, 0], a_bbox[i, j, 1], a_bbox[i, j, 2], a_bbox[i, j, 3]
-				bx0, by0, bx1, by1 = b_bbox[i, j, 0], b_bbox[i, j, 1], b_bbox[i, j, 2], b_bbox[i, j, 3]
-
-			if ax0 == 0 and ay0 == 0 and ax1 == 0 and ay1 == 0:
-				continue
-
-			if bx0 == 0 and by0 == 0 and bx1 == 0 and by1 == 0:
-				continue
-			
-			feat = feature[i, ay0: ay1, ax0: ax1, :]
-			bH, bW = by1 - by0, bx1 - bx0
-			
-			if bW > 1:
-				x_map = tf.tile(tf.reshape(-1 + tf.cast(2 / (bW - 1), 'float32') * tf.cast(tf.range(bW), 'float32'), [1, 1, bW]), [1, bH, 1])
-			else:
-				x_map = tf.ones([1, bH, 1])
-			
-			if bH > 1:
-				y_map = tf.tile(tf.reshape(-1 + tf.cast(2 / (bH - 1), 'float32') * tf.cast(tf.range(bH), 'float32'), [1, bH, 1]), [1, 1, bW])
-			else:
-				y_map = tf.ones([1, 1, bW])
-
-			feat = grid_sample(tf.expand_dims(feat, 0), x_map, y_map)[0]
-			self.features[k][i, by0: by1, bx0: bx1, :].assign(tf.maximum(feat, self.features[k][i, by0: by1, bx0: bx1, :]))
-
-		return self.features[k]
-
 	@tf.function
-	def train_one_step(self, A_img, B_img, A_kps, B_kps, A_bbox, B_bbox):
+	def train_step(self, A_img, B_img, A_kps, B_kps, A_bbox, B_bbox):
 		with tf.GradientTape() as tape_g, tf.GradientTape() as tape_di, tf.GradientTape() as tape_dk:
-			h_img, features = self.E([A_img, tf.concat([A_kps, B_kps], -1)], training=True)
-			# if self.features == None:
-			# 	self.features = [tf.Variable(tf.zeros(features[i].shape), trainable=False) for i in range(len(features))]
-
-			# features = [self.blend(i, features[i], A_bbox / 2 ** i, B_bbox / 2 ** i) for i in range(len(features))]
-			fake = self.G(h_img, features, training=True)
+			fake = self.G([A_img, tf.concat([A_kps, B_kps], -1)], training=True)
 			
 			d_fake_i = self.DI(tf.concat([fake, A_img], -1), training=True)
 			loss_g_adv_i = generator_loss(d_fake_i, self.args.gan_type)
@@ -202,12 +156,12 @@ class Model(tk.Model):
 			d_real_k = self.DK(tf.concat([B_img, B_kps], -1), training=True)
 			loss_d_k = self.args.w_adv * discriminator_loss(d_real_k, d_fake_k, self.args.gan_type)
 
-		self.vars_g = self.E.trainable_variables + self.G.trainable_variables
-		self.vars_di = self.DI.trainable_variables
-		self.vars_dk = self.DK.trainable_variables
-		self.optimizer_g.apply_gradients(zip(tape_g.gradient(loss_g, self.vars_g), self.vars_g))
-		self.optimizer_di.apply_gradients(zip(tape_di.gradient(loss_d_i, self.vars_di), self.vars_di))
-		self.optimizer_dk.apply_gradients(zip(tape_dk.gradient(loss_d_k, self.vars_dk), self.vars_dk))
+		vars_g = self.G.trainable_variables
+		vars_di = self.DI.trainable_variables
+		vars_dk = self.DK.trainable_variables
+		self.optimizer_g.apply_gradients(zip(tape_g.gradient(loss_g, vars_g), vars_g))
+		self.optimizer_di.apply_gradients(zip(tape_di.gradient(loss_d_i, vars_di), vars_di))
+		self.optimizer_dk.apply_gradients(zip(tape_dk.gradient(loss_d_k, vars_dk), vars_dk))
 
 		return {'loss_g_adv_i': loss_g_adv_i, 'loss_g_adv_k': loss_g_adv_k, 'loss_g_rec': loss_g_rec, 'loss_g_per': loss_g_per,
 				'loss_g_style': loss_g_style, 'loss_d_i': loss_d_i, 'loss_d_k': loss_d_k}
@@ -220,7 +174,7 @@ class Model(tk.Model):
 			for i in range(self.args.iteration):
 				A_img, B_img, A_kps, B_kps, A_bbox, B_bbox = next(self.iter)
 
-				item = self.train_one_step(A_img, B_img, A_kps, B_kps, A_bbox, B_bbox)
+				item = self.train_step(A_img, B_img, A_kps, B_kps, A_bbox, B_bbox)
 				print('epoch: [%3d/%3d] iter: [%6d/%6d] time: %.2f' % (e, self.args.epochs + self.args.decay_epochs, 
 					i, self.args.iteration, time.time() - start_time))
 				step += 1
@@ -235,15 +189,12 @@ class Model(tk.Model):
 						tf.summary.scalar('loss_d_i',     item['loss_d_i'],     step=step)
 						tf.summary.scalar('loss_d_k',     item['loss_d_k'],     step=step)
 
-			h_img, features = self.E([A_img, tf.concat([A_kps, B_kps], -1)], training=False)
-			# features = [self.blend(features[i], A_bbox / 2 ** i, B_bbox / 2 ** i) for i in range(len(features))]
-			fake = self.G(h_img, features, training=False)
-
+			fake = self.G([A_img, tf.concat([A_kps, B_kps], -1)], training=False)
 			fake = imdenorm(fake.numpy())
 			A_img = imdenorm(A_img.numpy())
 			B_img = imdenorm(B_img.numpy())
 
-			sample = np.zeros((self.args.batch_size * img_h, 5 * img_w, self.args.img_nc))
+			sample = np.ones((self.args.batch_size * img_h, 5 * img_w, self.args.img_nc))
 			for i in range(self.args.batch_size):
 				sample[i * img_h: (i + 1) * img_h, 0 * img_w: 1 * img_w] = A_img[i]
 				sample[i * img_h: (i + 1) * img_h, 1 * img_w: 2 * img_w] = self.htmap_to_img(A_kps[i])
@@ -252,7 +203,7 @@ class Model(tk.Model):
 				sample[i * img_h: (i + 1) * img_h, 4 * img_w: 5 * img_w] = fake[i]
 
 			imsave(os.path.join(self.args.sample_dir, f'{e}.jpg'), sample)
-			self.save_model()
+			self.save()
 
 	def test(self):
 		pass
@@ -260,10 +211,8 @@ class Model(tk.Model):
 	def htmap_to_img(self, kps):
 		return np.clip(np.expand_dims(np.sum(kps, -1), -1), 0, 1)
 
-	def load_model(self, all_module=False):
-		self.E = self.encoder()
-		self.E.load_weights(os.path.join(self.args.save_dir, 'E.h5'))
-		self.G = decoder(self.args.img_nc)
+	def load(self, all_module=False):
+		self.G = self.generator()
 		self.G.load_weights(os.path.join(self.args.save_dir, 'G.h5'))
 			
 		if all_module:
@@ -272,8 +221,7 @@ class Model(tk.Model):
 			self.DK = self.discriminator(self.args.img_nc + self.args.n_kps)
 			self.DK.load_weights(os.path.join(self.args.save_dir, 'DK.h5'))
 
-	def save_model(self):
-		self.E.save_weights(os.path.join(self.args.save_dir, 'E.h5'))
+	def save(self):
 		self.G.save_weights(os.path.join(self.args.save_dir, 'G.h5'))
 		self.DI.save_weights(os.path.join(self.args.save_dir, 'DI.h5'))
 		self.DK.save_weights(os.path.join(self.args.save_dir, 'DK.h5'))

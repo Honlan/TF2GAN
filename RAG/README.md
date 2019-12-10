@@ -10,7 +10,7 @@ Residual Attribute Generative Adversarial Network
 
 ## Train
 
-Download the [CelebA](http://mmlab.ie.cuhk.edu.hk/projects/CelebA.html) dataset as well as the annotation file of facial attributes, `list_attr_celeba.txt`
+Download the [CelebA](http://mmlab.ie.cuhk.edu.hk/projects/CelebA.html) dataset as well as the annotation file for facial attributes, `list_attr_celeba.txt`
 
 Convert the data to tfrecord for convenience
 
@@ -18,13 +18,13 @@ Convert the data to tfrecord for convenience
 python main.py --phase tfrecord
 ```
 
-Train the model download the pretrained model of `celeba`, unzip it and you will get a folder named `output`
+Train the model
 
 ```
 python main.py --phase train
 ```
 
-You can also 
+You can also download the pretrained model of `celeba`, unzip it and you will get a folder named `output`
 
 ## Test
 

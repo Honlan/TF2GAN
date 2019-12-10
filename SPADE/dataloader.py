@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import tensorflow as tf
+import numpy as np
 from glob import glob
 import os
 
@@ -30,14 +31,16 @@ class Dataloader(object):
 		elif args.phase == 'train':
 			AUTOTUNE = tf.data.experimental.AUTOTUNE
 			dataset = tf.data.TFRecordDataset(self.tfrecord_path)
-			self.dataset_size = dataset.reduce(0, lambda x, _: x + 1)
+			self.dataset_size = dataset.reduce(np.int64(0), lambda x, _: x + 1)
 			self.desc = {'img': tf.io.FixedLenFeature([], 'string'), 'label': tf.io.FixedLenFeature([], 'string')}
 			self.loader = dataset.shuffle(min(self.dataset_size, 10000)).repeat().map(
 				self.parse_example, AUTOTUNE).batch(self.batch_size).prefetch(AUTOTUNE)
 
 		elif args.phase == 'test':
-			dataset = tf.data.Dataset.list_files(os.path.join('dataset', args.dataset_name, args.test_img_dir, '*'))
-			self.loader = dataset.map(self.load_test_data)
+			img_dataset = tf.data.Dataset.list_files(os.path.join('dataset', args.dataset_name, args.test_img_dir, '*'), False)
+			label_dataset = tf.data.Dataset.list_files(os.path.join('dataset', args.dataset_name, args.test_label_dir, '*'), False)
+			self.img_loader = img_dataset.map(self.load_test_image)
+			self.label_loader = label_dataset.map(self.load_test_label)
 
 	def parse_example(self, example):
 		feature = tf.io.parse_single_example(example, self.desc)
@@ -59,6 +62,11 @@ class Dataloader(object):
 		data = tf.image.random_crop(data, (self.img_size, self.img_size, self.img_nc + self.label_nc))
 		return data[:, :, :self.img_nc], data[:, :, self.img_nc:]
 
-	def load_test_data(self, img_path):
+	def load_test_image(self, img_path):
 		img = self.load_image(tf.io.read_file(img_path), self.img_nc, True)
-		return img_path, tf.image.resize(img, (self.img_size, self.img_size))
+		return tf.image.resize(img, (self.img_size, self.img_size))
+
+	def load_test_label(self, label_path):
+		label = self.load_image(tf.io.read_file(label_path), 1, False)
+		label = tf.image.resize(label, (self.img_size, self.img_size), tf.image.ResizeMethod.NEAREST_NEIGHBOR)
+		return tf.one_hot(label[:, :, 0], depth=self.label_nc, on_value=1., off_value=0.)

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import tensorflow as tf
+import numpy as np
 import os, pickle
 import sys
 sys.path.append('..')
@@ -15,15 +16,10 @@ class Dataloader(object):
 		self.n_body_part = args.n_body_part
 		self.tfrecord_path = os.path.join('dataset', f'{args.dataset_name}.tfrec')
 
-		with open(os.path.join(self.dataset_dir, args.train_pairs_csv), 'r') as fr:
-			self.train_pairs = [line.strip('\n').split(',') for line in fr.readlines()[1:]]
-			self.train_size = len(self.train_pairs)
-
-		with open(os.path.join(self.dataset_dir, args.test_pairs_csv), 'r') as fr:
-			self.test_pairs = [line.strip('\n').split(',') for line in fr.readlines()[1:]]
-			self.test_size = len(self.test_pairs)
-
 		if args.phase == 'tfrecord':
+			with open(os.path.join(self.dataset_dir, args.train_pairs_csv), 'r') as fr:
+				train_pairs = [line.strip('\n').split(',') for line in fr.readlines()[1:]]
+
 			with open(os.path.join(self.dataset_dir, args.kps_bbox_pkl), 'rb') as fr:
 				annos = pickle.load(fr)
 				A_kps = [array_to_list(annos['train'][pair[0]]['kps']) for pair in self.train_pairs]
@@ -46,7 +42,9 @@ class Dataloader(object):
 					writer.write(tf.train.Example(features=tf.train.Features(feature=feature)).SerializeToString())
 		
 		elif args.phase == 'train':
+			AUTOTUNE = tf.data.experimental.AUTOTUNE
 			dataset = tf.data.TFRecordDataset(self.tfrecord_path)
+			dataset_size = dataset.reduce(np.int64(0), lambda x, _: x + 1)
 			self.desc = {
 				'A_img': tf.io.FixedLenFeature([], 'string'),
 				'B_img': tf.io.FixedLenFeature([], 'string'),
@@ -55,8 +53,12 @@ class Dataloader(object):
 				'A_bbox': tf.io.FixedLenFeature([self.n_body_part, 4], 'float32'),
 				'B_bbox': tf.io.FixedLenFeature([self.n_body_part, 4], 'float32'),
 			}
-			self.loader = dataset.shuffle(min(self.train_size, 10000)).repeat().map(
-				self.parse_example, tf.data.experimental.AUTOTUNE).batch(self.batch_size).prefetch(100)
+			self.loader = dataset.shuffle(min(dataset_size, 10000)).repeat().map(
+				self.parse_example, AUTOTUNE).batch(self.batch_size).prefetch(AUTOTUNE)
+
+		elif args.phase == 'test':
+			with open(os.path.join(self.dataset_dir, args.test_pairs_csv), 'r') as fr:
+				test_pairs = [line.strip('\n').split(',') for line in fr.readlines()[1:]]
 
 	def parse_example(self, example):
 		feature = tf.io.parse_single_example(example, self.desc)
@@ -70,8 +72,7 @@ class Dataloader(object):
 		img = tf.cond(tf.image.is_jpeg(img_str), 
 			lambda: tf.image.decode_jpeg(img_str, self.img_nc), 
 			lambda: tf.image.decode_png(img_str, self.img_nc))
-		img = tf.cast(img, 'float32') / 127.5 - 1.
-		return img
+		return tf.cast(img, 'float32') / 127.5 - 1.
 
 	def kps_to_htmap(self, kps):
 		htmap = []
