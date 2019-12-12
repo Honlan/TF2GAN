@@ -14,6 +14,16 @@ Pretrained models: [Tencent Drive](https://share.weiyun.com/5zidEUa), 2nv5sp
 
 ![](DCGAN/asset/result.jpg)
 
+### [SPADE](SPADE/) (Semantic Image Synthesis with Spatially-Adaptive Normalization)
+
+[paper](https://arxiv.org/abs/1903.07291) [project](https://nvlabs.github.io/SPADE/)
+
+![](SPADE/asset/teaser.png)
+
+![](SPADE/asset/random.jpg)
+
+![](SPADE/asset/combine.jpg)
+
 ## Semantic Segmentation
 
 ### [UNet](UNet/) (Convolutional Networks for Biomedical Image Segmentation)

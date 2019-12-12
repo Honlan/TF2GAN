@@ -1,18 +1,20 @@
-# DCGAN
+# SPADE
 
-Deep Convolutional Generative Adversarial Network
+Semantic Image Synthesis with Spatially-Adaptive Normalization
 
-[arvix](https://arxiv.org/abs/1511.06434) [project](https://github.com/carpedm20/DCGAN-tensorflow)
+[paper](https://arxiv.org/abs/1903.07291) [project](https://nvlabs.github.io/SPADE/)
 
 ![](asset/teaser.png)
 
-![](asset/result.jpg)
+![](asset/random.jpg)
+
+![](asset/combine.jpg)
 
 ## Train
 
-Make a folder under `dataset` and put your images in it, just like the `celeba` folder
+Make a folder under `dataset` and put your images as well as labels in it, just like the `CelebAMask19` folder
 
-Convert the data to tfrecord for convenience, where the default value of `--dataset_name` is `celeba`
+Convert the data to tfrecord for convenience, where the default value of `--dataset_name` is `CelebAMask19`
 
 ```
 python main.py --dataset_name your_dataset_name --phase tfrecord
@@ -26,16 +28,16 @@ python main.py --dataset_name your_dataset_name --phase train
 
 ## Test
 
-Test the model
+Test the model. You need to specify the following three options
+
+- `--test_img_dir`: the folder of images to test, whose default value is `img`
+- `--test_label_dir`: the folder of labels to test, whose default value is `label`
+- `--test_mode`: either `random` or `combine`
+
+You can also download the pretrained model of `CelebAMask19`, unzip it and you will get a folder named `output`
 
 ```
-python main.py --dataset_name your_dataset_name --phase test
+python main.py --phase test --test_mode combine
 ```
 
-Or download the pretrained model of `celeba`, unzip it and you will get a folder named `output`
-
-```
-python main.py --phase test
-```
-
-The generated image is saved as `output/DCGAN_{dataset_name}/result/result.jpg`
+The generated `random.jpg` and `combine.jpg` are saved in `output/SPADE_{dataset_name}/result/`
