@@ -38,8 +38,8 @@ class Model(object):
 
 		cam_logit, h, heatmap = self.cam(h, filters=256, sn=False)
 
-		# mlp = tk.Sequential([Flatten(), Dense(256), Relu(), Dense(256), Relu()])(h) # too many params
-		mlp = tk.Sequential([Dense(256), Relu(), Dense(256), Relu()])(global_avg_pooling(h))
+		mlp = tk.Sequential([Flatten(), Dense(256), Relu(), Dense(256), Relu()])(h) # more params
+		# mlp = tk.Sequential([Dense(256), Relu(), Dense(256), Relu()])(global_avg_pooling(h)) # fewer params
 		gamma = tf.reshape(Dense(256)(mlp), [-1, 1, 1, 256])
 		beta  = tf.reshape(Dense(256)(mlp), [-1, 1, 1, 256])
 
@@ -100,9 +100,9 @@ class Model(object):
 			self.summary_writer = tf.summary.create_file_writer(self.args.log_dir)
 		
 		elif self.args.phase == 'test':
-			self.img_loader, self.label_loader = dataloader.img_loader, dataloader.label_loader
-			self.N_img = self.img_loader.reduce(0, lambda x, _: x + 1)
-			self.N_label = self.label_loader.reduce(0, lambda x, _: x + 1)
+			self.A_loader, self.B_loader = dataloader.A_loader, dataloader.B_loader
+			self.N_A = self.A_loader.reduce(0, lambda x, _: x + 1)
+			self.N_B = self.B_loader.reduce(0, lambda x, _: x + 1)
 			self.load()
 
 	def cam_loss(self, source, non_source):
@@ -186,36 +186,26 @@ class Model(object):
 				sample[i * img_size: (i + 1) * img_size, 3 * img_size: 4 * img_size] = fake_a[i]
 
 			imsave(os.path.join(self.args.sample_dir, f'{e}.jpg'), sample)
+			self.save()
 
 	def test(self):
 		img_size = self.args.img_size
-		if self.args.test_mode == 'random':
-			result = np.ones(((self.args.n_random + 1) * img_size, self.N_label * img_size, self.args.img_nc))
-			for j, label in enumerate(self.label_loader):
-				for i in range(self.args.n_random):
-					random = self.G(tf.expand_dims(label, 0), None, None, random_style=True)
-					result[(i + 1) * img_size: (i + 2) * img_size, j * img_size: (j + 1) * img_size] = imdenorm(random[0].numpy())
-				
-					if i == 0:
-						result[:img_size, j * img_size: (j + 1) * img_size] = self.multi_to_one(label.numpy())
 
-			imsave(os.path.join(self.args.result_dir, 'random.jpg'), result)
+		A2B = np.ones((2 * img_size, self.N_A * img_size, self.args.img_nc))
+		for i, A in enumerate(self.A_loader):
+			fake_B, _, _ = self.Gb(tf.expand_dims(A, 0))
+			A2B[:img_size, i * img_size: (i + 1) * img_size] = imdenorm(A.numpy())
+			A2B[img_size:, i * img_size: (i + 1) * img_size] = imdenorm(fake_B[0].numpy())
 
-		elif self.args.test_mode == 'combine':
-			result = np.ones(((self.N_img + 1) * img_size, (self.N_label + 1) * img_size, self.args.img_nc))
-			for i, img in enumerate(self.img_loader):
-				result[(i + 1) * img_size: (i + 2) * img_size, :img_size] = imdenorm(img.numpy())
-				mean, var = self.E(tf.expand_dims(img, 0))
+		imsave(os.path.join(self.args.result_dir, 'A2B.jpg'), A2B)
 
-				for j, label in enumerate(self.label_loader):
-					fake = self.G(tf.expand_dims(label, 0), mean, var, random_style=False)
-					fake = imdenorm(fake[0].numpy())
-					result[(i + 1) * img_size: (i + 2) * img_size, (j + 1) * img_size: (j + 2) * img_size] = fake
-					
-					if i == 0:
-						result[:img_size, (j + 1) * img_size: (j + 2) * img_size] = self.multi_to_one(label.numpy())
-
-			imsave(os.path.join(self.args.result_dir, 'combine.jpg'), result)
+		B2A = np.ones((2 * img_size, self.N_B * img_size, self.args.img_nc))
+		for i, B in enumerate(self.B_loader):
+			fake_A, _, _ = self.Ga(tf.expand_dims(B, 0))
+			B2A[:img_size, i * img_size: (i + 1) * img_size] = imdenorm(B.numpy())
+			B2A[img_size:, i * img_size: (i + 1) * img_size] = imdenorm(fake_A[0].numpy())
+			
+		imsave(os.path.join(self.args.result_dir, 'B2A.jpg'), B2A)
 
 	def load(self, all_module=False):
 		self.Ga = self.generator()
@@ -229,7 +219,7 @@ class Model(object):
 			self.Db = self.discriminator()
 			self.Db.load_weights(os.path.join(self.args.save_dir, 'Db.h5'))
 
-	def save(self, label):
+	def save(self):
 		self.Ga.save_weights(os.path.join(self.args.save_dir, 'Ga.h5'))
 		self.Gb.save_weights(os.path.join(self.args.save_dir, 'Gb.h5'))
 		self.Da.save_weights(os.path.join(self.args.save_dir, 'Da.h5'))

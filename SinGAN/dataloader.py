@@ -8,12 +8,12 @@ from utils import *
 
 class Dataloader(object):
 	def __init__(self, args):
-		self.img = imread(os.path.join('input', 'image', args.input_image))
+		self.img = imread(os.path.join('asset', args.input_image))[:, :, :args.img_nc]
 		self.max_size = args.max_size
 		self.min_size = args.min_size
 		self.scale_factor = args.scale_factor
 
-	def get_multi_scale(self, h, w):
+	def get_multi_scale_sizes(self, h, w):
 		if max(h, w) > self.max_size:
 			sf = max(h, w) / self.max_size
 			if h > w:
@@ -36,7 +36,7 @@ class Dataloader(object):
 
 	def get_multi_scale_imgs_and_sizes(self):
 		h, w = self.img.shape[:2]
-		num_scale, sizes = self.get_multi_scale(h, w)
+		num_scale, sizes = self.get_multi_scale_sizes(h, w)
 		
 		imgs = []
 		for i in range(num_scale):

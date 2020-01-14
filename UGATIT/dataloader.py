@@ -40,10 +40,10 @@ class Dataloader(object):
 				self.parse_example, AUTOTUNE).batch(self.batch_size).prefetch(AUTOTUNE)
 
 		elif args.phase == 'test':
-			img_dataset = tf.data.Dataset.list_files(os.path.join('dataset', args.dataset_name, args.test_img_dir, '*'), False)
-			label_dataset = tf.data.Dataset.list_files(os.path.join('dataset', args.dataset_name, args.test_label_dir, '*'), False)
-			self.img_loader = img_dataset.map(self.load_test_image)
-			self.label_loader = label_dataset.map(self.load_test_label)
+			A_dataset = tf.data.Dataset.list_files(os.path.join('dataset', args.dataset_name, 'testA', '*'), False)
+			B_dataset = tf.data.Dataset.list_files(os.path.join('dataset', args.dataset_name, 'testB', '*'), False)
+			self.A_loader = A_dataset.map(self.load_test_image)
+			self.B_loader = B_dataset.map(self.load_test_image)
 
 	def parse_example(self, example):
 		feature = tf.io.parse_single_example(example, self.desc)
@@ -59,3 +59,7 @@ class Dataloader(object):
 		img = tf.image.resize(img, (self.aug_size, self.aug_size))
 		img = tf.image.random_crop(img, (self.img_size, self.img_size, self.img_nc))
 		return tf.image.random_flip_left_right(img)
+
+	def load_test_image(self, img_path):
+		img = self.load_image(tf.io.read_file(img_path))
+		return tf.image.resize(img, (self.img_size, self.img_size))

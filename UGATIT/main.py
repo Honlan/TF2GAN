@@ -14,7 +14,7 @@ def parse_args():
 
 	parser.add_argument('--dataset_name', type=str, default='selfie2anime')
 	parser.add_argument('--phase', type=str, default='tfrecord', choices=('tfrecord', 'train', 'test'))
-	parser.add_argument('--img_size', type=int, default=128)
+	parser.add_argument('--img_size', type=int, default=256)
 	parser.add_argument('--img_nc', type=int, default=3)
 	parser.add_argument('--batch_size', type=int, default=1)
 

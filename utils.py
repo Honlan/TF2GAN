@@ -12,7 +12,7 @@ def imread(img_path, norm=True):
 	return img / 255. if norm else img
 
 def imsave(save_path, img):
-	imageio.imsave(save_path, np.clip(img, 0, 1))
+	imageio.imsave(save_path, img)
 
 def mimsave(save_path, imgs, fps=10):
 	imageio.mimsave(save_path, imgs, fps=fps)
@@ -56,13 +56,16 @@ def ceil(x):
 def floor(x):
 	return int(np.floor(x))
 
-def get_nonzero_center(img):
+def get_nonzero_region(img):
 	non = np.nonzero(img)
-	y0 = np.min(non[0])
-	y1 = np.max(non[0])
-	x0 = np.min(non[1])
-	x1 = np.max(non[1])
-	return (y0 + y1) // 2, (x0 + x1) // 2
+	if len(non[0]) == 0 or len(non[1]) == 0:
+		y0, y1, x0, x1 = 0, img.shape[0] - 1, 0, img.shape[1] - 1
+	else:
+		y0 = np.min(non[0])
+		y1 = np.max(non[0])
+		x0 = np.min(non[1])
+		x1 = np.max(non[1])
+	return y0, y1, (y0 + y1) // 2, x0, x1, (x0 + x1) // 2
 
 def array_to_list(array):
 	return np.reshape(array, [array.size]).tolist()
